@@ -8,22 +8,33 @@ function App() {
   const [alphaBeta, setAlphaBeta] = useState("");
   const [manualBedAllowed, setManualBedAllowed] = useState("");
 
-  useEffect(() => {
-    if (totalDose && fractions && !dosePerFraction) {
-      const dpf = parseFloat(totalDose) / parseFloat(fractions);
-      if (!isNaN(dpf)) setDosePerFraction(dpf.toFixed(2));
-    }
-  }, [totalDose, fractions]);
+useEffect(() => {
+  const td = parseFloat(totalDose);
+  const fr = parseFloat(fractions);
+  const dpf = parseFloat(dosePerFraction);
 
-  const bedAllowed = () => {
-    if (dosePerFraction && fractions && alphaBeta) {
-      const d = parseFloat(dosePerFraction);
-      const n = parseFloat(fractions);
-      const ab = parseFloat(alphaBeta);
-      return (n * d * (1 + d / ab)).toFixed(2);
-    }
-    return "";
-  };
+  // Si dose totale + fractions → calcule dose/fraction
+  if (td && fr && !dosePerFraction) {
+    const calc = td / fr;
+    if (!isNaN(calc)) setDosePerFraction(calc.toFixed(2));
+  }
+
+  // Si dose totale + dose/fraction → calcule nb fractions
+  if (td && dpf && !fractions) {
+    const calc = td / dpf;
+    if (!isNaN(calc)) setFractions(calc.toFixed(0));
+  }
+}, [totalDose, fractions, dosePerFraction]);
+
+const bedAllowed = () => {
+  const d = parseFloat(dosePerFraction);
+  const n = parseFloat(fractions);
+  const ab = parseFloat(alphaBeta);
+  if (!isNaN(d) && !isNaN(n) && !isNaN(ab)) {
+    return (n * d * (1 + d / ab)).toFixed(2);
+  }
+  return "";
+};
 
   const eqd2Allowed = () => {
     if (bedAllowed() && alphaBeta) {
