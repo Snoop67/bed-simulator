@@ -8,17 +8,17 @@ function App() {
   const [alphaBeta, setAlphaBeta] = useState("");
   const [manualBedAllowed, setManualBedAllowed] = useState("");
 
-  const handleAutoCalculate = () => {
+  const calculateDoseOrFractions = () => {
     const td = parseFloat(totalDose.replace(",", "."));
     const fr = parseFloat(fractions.replace(",", "."));
     const dpf = parseFloat(dosePerFraction.replace(",", "."));
 
-    if (!dosePerFraction && td && fr) {
+    if (td && fr && !dosePerFraction) {
       const calc = td / fr;
       if (!isNaN(calc)) setDosePerFraction(calc.toFixed(2));
     }
 
-    if (!fractions && td && dpf) {
+    if (td && dpf && !fractions) {
       const calc = td / dpf;
       if (!isNaN(calc)) setFractions(Math.round(calc).toString());
     }
@@ -46,7 +46,7 @@ function App() {
   const [usedAlphaBeta, setUsedAlphaBeta] = useState("");
   const [usedDosePerFraction, setUsedDosePerFraction] = useState("");
 
-  const handleAutoUsed = () => {
+  const calculateUsedDosePerFraction = () => {
     const td = parseFloat(usedDose.replace(",", "."));
     const fr = parseFloat(usedFractions.replace(",", "."));
     if (td && fr) {
@@ -172,11 +172,16 @@ function App() {
 
       <h2>1. BED totale autorisée</h2>
       <label>Dose totale (Gy)</label>
-      <input value={totalDose} onChange={(e) => setTotalDose(e.target.value)} onBlur={handleAutoCalculate} />
+      <input value={totalDose} onChange={(e) => setTotalDose(e.target.value)} />
+
       <label>Nombre de fractions</label>
-      <input value={fractions} onChange={(e) => setFractions(e.target.value)} onBlur={handleAutoCalculate} />
+      <input value={fractions} onChange={(e) => setFractions(e.target.value)} />
+
       <label>Dose par fraction (Gy)</label>
-      <input value={dosePerFraction} onChange={(e) => setDosePerFraction(e.target.value)} onBlur={handleAutoCalculate} />
+      <input value={dosePerFraction} onChange={(e) => setDosePerFraction(e.target.value)} />
+
+      <button onClick={calculateDoseOrFractions}>⚙️ Calculer le champ manquant</button>
+
       <label>Alpha/Beta (Gy)</label>
       <input value={alphaBeta} onChange={(e) => setAlphaBeta(e.target.value)} />
 
@@ -190,11 +195,16 @@ function App() {
 
       <h2>2. BED utilisée</h2>
       <label>Dose totale reçue (Gy)</label>
-      <input value={usedDose} onChange={(e) => setUsedDose(e.target.value)} onBlur={handleAutoUsed} />
+      <input value={usedDose} onChange={(e) => setUsedDose(e.target.value)} />
+
       <label>Nombre de fractions</label>
-      <input value={usedFractions} onChange={(e) => setUsedFractions(e.target.value)} onBlur={handleAutoUsed} />
+      <input value={usedFractions} onChange={(e) => setUsedFractions(e.target.value)} />
+
+      <button onClick={calculateUsedDosePerFraction}>⚙️ Calculer dose/fraction</button>
+
       <label>Alpha/Beta (Gy)</label>
       <input value={usedAlphaBeta} onChange={(e) => setUsedAlphaBeta(e.target.value)} />
+
       <label>Dose par fraction (calculée)</label>
       <input value={usedDosePerFraction} readOnly />
 
