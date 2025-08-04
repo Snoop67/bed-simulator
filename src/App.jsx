@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import jsPDF from "jspdf";
 
 function App() {
@@ -8,37 +8,31 @@ function App() {
   const [alphaBeta, setAlphaBeta] = useState("");
   const [manualBedAllowed, setManualBedAllowed] = useState("");
 
-useEffect(() => {
-  const td = parseFloat(totalDose.replace(",", "."));
-  const fr = parseFloat(fractions.replace(",", "."));
-  const dpf = parseFloat(dosePerFraction.replace(",", "."));
+  const handleAutoCalculate = () => {
+    const td = parseFloat(totalDose.replace(",", "."));
+    const fr = parseFloat(fractions.replace(",", "."));
+    const dpf = parseFloat(dosePerFraction.replace(",", "."));
 
-  // Cas : dose totale + fractions ⇒ calcule dose/fraction
-  if (!isNaN(td) && !isNaN(fr) && !dosePerFraction) {
-    const result = td / fr;
-    if (!isNaN(result) && isFinite(result)) {
-      setDosePerFraction(result.toFixed(2));
+    if (!dosePerFraction && td && fr) {
+      const calc = td / fr;
+      if (!isNaN(calc)) setDosePerFraction(calc.toFixed(2));
     }
-  }
 
-  // Cas : dose totale + dose/fraction ⇒ calcule nb fractions
-  if (!isNaN(td) && !isNaN(dpf) && !fractions) {
-    const result = td / dpf;
-    if (!isNaN(result) && isFinite(result)) {
-      setFractions(Math.round(result).toString());
+    if (!fractions && td && dpf) {
+      const calc = td / dpf;
+      if (!isNaN(calc)) setFractions(Math.round(calc).toString());
     }
-  }
-}, [totalDose, fractions, dosePerFraction]);
+  };
 
-const bedAllowed = () => {
-  const d = parseFloat(dosePerFraction);
-  const n = parseFloat(fractions);
-  const ab = parseFloat(alphaBeta);
-  if (!isNaN(d) && !isNaN(n) && !isNaN(ab)) {
-    return (n * d * (1 + d / ab)).toFixed(2);
-  }
-  return "";
-};
+  const bedAllowed = () => {
+    const d = parseFloat(dosePerFraction);
+    const n = parseFloat(fractions);
+    const ab = parseFloat(alphaBeta);
+    if (!isNaN(d) && !isNaN(n) && !isNaN(ab)) {
+      return (n * d * (1 + d / ab)).toFixed(2);
+    }
+    return "";
+  };
 
   const eqd2Allowed = () => {
     if (bedAllowed() && alphaBeta) {
@@ -52,18 +46,20 @@ const bedAllowed = () => {
   const [usedAlphaBeta, setUsedAlphaBeta] = useState("");
   const [usedDosePerFraction, setUsedDosePerFraction] = useState("");
 
-  useEffect(() => {
-    if (usedDose && usedFractions) {
-      const dpf = parseFloat(usedDose) / parseFloat(usedFractions);
-      if (!isNaN(dpf)) setUsedDosePerFraction(dpf.toFixed(2));
+  const handleAutoUsed = () => {
+    const td = parseFloat(usedDose.replace(",", "."));
+    const fr = parseFloat(usedFractions.replace(",", "."));
+    if (td && fr) {
+      const calc = td / fr;
+      if (!isNaN(calc)) setUsedDosePerFraction(calc.toFixed(2));
     }
-  }, [usedDose, usedFractions]);
+  };
 
   const bedUsed = () => {
-    if (usedDosePerFraction && usedFractions && usedAlphaBeta) {
-      const d = parseFloat(usedDosePerFraction);
-      const n = parseFloat(usedFractions);
-      const ab = parseFloat(usedAlphaBeta);
+    const d = parseFloat(usedDosePerFraction);
+    const n = parseFloat(usedFractions);
+    const ab = parseFloat(usedAlphaBeta);
+    if (!isNaN(d) && !isNaN(n) && !isNaN(ab)) {
       return (n * d * (1 + d / ab)).toFixed(2);
     }
     return "";
@@ -120,7 +116,6 @@ const bedAllowed = () => {
     return "";
   };
 
-  // Organ name + saved results
   const [organName, setOrganName] = useState("");
   const [history, setHistory] = useState([]);
 
@@ -177,11 +172,11 @@ const bedAllowed = () => {
 
       <h2>1. BED totale autorisée</h2>
       <label>Dose totale (Gy)</label>
-      <input value={totalDose} onChange={(e) => setTotalDose(e.target.value)} />
+      <input value={totalDose} onChange={(e) => setTotalDose(e.target.value)} onBlur={handleAutoCalculate} />
       <label>Nombre de fractions</label>
-      <input value={fractions} onChange={(e) => setFractions(e.target.value)} />
+      <input value={fractions} onChange={(e) => setFractions(e.target.value)} onBlur={handleAutoCalculate} />
       <label>Dose par fraction (Gy)</label>
-      <input value={dosePerFraction} onChange={(e) => setDosePerFraction(e.target.value)} />
+      <input value={dosePerFraction} onChange={(e) => setDosePerFraction(e.target.value)} onBlur={handleAutoCalculate} />
       <label>Alpha/Beta (Gy)</label>
       <input value={alphaBeta} onChange={(e) => setAlphaBeta(e.target.value)} />
 
@@ -195,9 +190,9 @@ const bedAllowed = () => {
 
       <h2>2. BED utilisée</h2>
       <label>Dose totale reçue (Gy)</label>
-      <input value={usedDose} onChange={(e) => setUsedDose(e.target.value)} />
+      <input value={usedDose} onChange={(e) => setUsedDose(e.target.value)} onBlur={handleAutoUsed} />
       <label>Nombre de fractions</label>
-      <input value={usedFractions} onChange={(e) => setUsedFractions(e.target.value)} />
+      <input value={usedFractions} onChange={(e) => setUsedFractions(e.target.value)} onBlur={handleAutoUsed} />
       <label>Alpha/Beta (Gy)</label>
       <input value={usedAlphaBeta} onChange={(e) => setUsedAlphaBeta(e.target.value)} />
       <label>Dose par fraction (calculée)</label>
