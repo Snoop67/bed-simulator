@@ -9,20 +9,24 @@ function App() {
   const [manualBedAllowed, setManualBedAllowed] = useState("");
 
 useEffect(() => {
-  const td = parseFloat(totalDose);
-  const fr = parseFloat(fractions);
-  const dpf = parseFloat(dosePerFraction);
+  const td = parseFloat(totalDose.replace(",", "."));
+  const fr = parseFloat(fractions.replace(",", "."));
+  const dpf = parseFloat(dosePerFraction.replace(",", "."));
 
-  // Si dose totale + fractions → calcule dose/fraction
-  if (td && fr && !dosePerFraction) {
-    const calc = td / fr;
-    if (!isNaN(calc)) setDosePerFraction(calc.toFixed(2));
+  // Cas : dose totale + fractions ⇒ calcule dose/fraction
+  if (!isNaN(td) && !isNaN(fr) && !dosePerFraction) {
+    const result = td / fr;
+    if (!isNaN(result) && isFinite(result)) {
+      setDosePerFraction(result.toFixed(2));
+    }
   }
 
-  // Si dose totale + dose/fraction → calcule nb fractions
-  if (td && dpf && !fractions) {
-    const calc = td / dpf;
-    if (!isNaN(calc)) setFractions(calc.toFixed(0));
+  // Cas : dose totale + dose/fraction ⇒ calcule nb fractions
+  if (!isNaN(td) && !isNaN(dpf) && !fractions) {
+    const result = td / dpf;
+    if (!isNaN(result) && isFinite(result)) {
+      setFractions(Math.round(result).toString());
+    }
   }
 }, [totalDose, fractions, dosePerFraction]);
 
