@@ -1,74 +1,101 @@
+/* Style global */
 body {
   font-family: Arial, sans-serif;
-  background-color: #f9fbfd;
-  margin: 0;
-  padding: 0;
+  background-color: #f9f9fb;
+  color: #333;
+  padding: 20px;
 }
 
-.container {
-  max-width: 900px;
-  margin: 2rem auto;
-  padding: 2rem;
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
+/* Titre principal */
 h1 {
-  color: #0056b3;
+  color: #004aad;
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 30px;
 }
 
+/* Sous-titres */
 h2 {
-  color: #007bff;
-  margin-top: 2.5rem;
-  margin-bottom: 1rem;
+  color: #004aad;
+  margin-top: 25px;
+  margin-bottom: 15px;
 }
 
+/* Formulaires et champs */
 label {
   display: block;
-  margin: 1rem 0 0.25rem;
+  margin-bottom: 6px;
   font-weight: bold;
-  color: #0056b3;
+  color: #004aad;
 }
 
-input {
+input, select {
   width: 100%;
-  padding: 0.6rem;
-  font-size: 1rem;
-  border-radius: 6px;
+  padding: 8px;
   border: 1px solid #ccc;
-  margin-bottom: 1rem;
-}
-
-.result {
-  background: #e9f2ff;
-  padding: 1rem;
   border-radius: 6px;
-  margin-top: 1rem;
-  font-weight: bold;
-  border-left: 4px solid #007bff;
+  margin-bottom: 15px;
+  font-size: 14px;
 }
 
+/* Groupes de champs */
+.form-section {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin-bottom: 25px;
+}
+
+/* Boutons */
 button {
-  margin: 1rem 0.5rem 0 0;
-  padding: 0.6rem 1rem;
-  background-color: #007bff;
+  background-color: #004aad;
   color: white;
   border: none;
+  padding: 10px 18px;
   border-radius: 6px;
+  font-size: 14px;
   cursor: pointer;
+  margin-right: 10px;
+  transition: background 0.2s ease-in-out;
 }
 
 button:hover {
-  background-color: #0056b3;
+  background-color: #00337a;
 }
 
-.history {
-  background: #f1f8ff;
-  padding: 1rem;
-  margin-top: 1rem;
-  border-left: 4px solid #0056b3;
+/* Liens */
+a {
+  color: #004aad;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Résultats */
+.result-box {
+  background: #f0f7ff;
+  border-left: 4px solid #004aad;
+  padding: 12px;
+  margin-top: 15px;
   border-radius: 6px;
+}
+
+/* Tableau OAR */
+.oar-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 15px;
+}
+
+.oar-table th, .oar-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.oar-table th {
+  background-color: #004aad;
+  color: white;
 }
