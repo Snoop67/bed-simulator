@@ -1,185 +1,191 @@
 import React, { useState } from "react";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
 import "./index.css";
 
+const organAlphaBeta = {
+  "Moelle épinière": 2,
+  "Tronc cérébral": 2,
+  "Nerf optique": 2,
+  "Chiasma optique": 2,
+  "Rétine": 2,
+  "Cristallin": 1.5,
+  "Cervelet": 2,
+  "Cerveau (parenchyme)": 2,
+  "Hippocampe": 2,
+  "Glande parotide": 3,
+  "Glande sous-maxillaire": 3,
+  "Muqueuse orale": 10,
+  "Larynx (cartilage)": 3,
+  "Larynx (muqueuse)": 10,
+  "Œsophage (tardif)": 3,
+  "Poumon (tissu normal)": 3,
+  "Cœur": 3,
+  "Péricarde": 3,
+  "Foie": 2.75,
+  "Reins": 1.5,
+  "Vessie": 3,
+  "Rectum": 3,
+  "Intestin grêle": 3,
+  "Côlon": 3,
+  "Peau (réactions tardives)": 3,
+  "Peau (réactions aiguës)": 10,
+  "Os cortical": 2,
+  "Tête fémorale": 2,
+  "Testicules": 2,
+  "Ovaires": 3,
+};
+
 export default function App() {
-  // STATES
-  const [totalDoseAuth, setTotalDoseAuth] = useState("");
-  const [numFractionsAuth, setNumFractionsAuth] = useState("");
-  const [dosePerFractionAuth, setDosePerFractionAuth] = useState("");
-  const [alphaBetaAuth, setAlphaBetaAuth] = useState("");
-  const [manualBEDAuth, setManualBEDAuth] = useState("");
+  const [step1, setStep1] = useState({ doseTot: "", doseFrac: "", nbFrac: "", alphaBeta: "", autoCalc: true });
+  const [step2, setStep2] = useState({ doseTot: "", doseFrac: "", nbFrac: "", autoCalc: true });
+  const [bedAutorisee, setBedAutorisee] = useState(null);
+  const [bedUtilisee, setBedUtilisee] = useState(null);
+  const [bedRestante, setBedRestante] = useState(null);
+  const [eqd2Restante, setEqd2Restante] = useState(null);
+  const [modeleRecup, setModeleRecup] = useState("");
+  const [moisEcoules, setMoisEcoules] = useState("");
+  const [pourcentRecup, setPourcentRecup] = useState(0);
 
-  const [totalDoseUsed, setTotalDoseUsed] = useState("");
-  const [numFractionsUsed, setNumFractionsUsed] = useState("");
-  const [dosePerFractionUsed, setDosePerFractionUsed] = useState("");
-  const [alphaBetaUsed, setAlphaBetaUsed] = useState("");
-  const [manualBEDUsed, setManualBEDUsed] = useState("");
-
-  const [forgetPercent, setForgetPercent] = useState("");
-  const [maxFractions, setMaxFractions] = useState("");
-  const [alphaBetaMax, setAlphaBetaMax] = useState("");
-
-  const [results, setResults] = useState([]);
-  const [savedResults, setSavedResults] = useState([]);
-  const [selectedModel, setSelectedModel] = useState("");
-  const [showTooltip, setShowTooltip] = useState(null);
-
-  // Récupération lente/rapide — table des modèles
-  const recoveryModels = {
-    paradis: {
-      name: "Paradis et al. : récupération rapide",
-      details: `0–3 mois : 0 %\n4–6 mois : 10 %\n7–12 mois : 25 %\n≥ 12 mois : 50 % (plateau)`,
-    },
-    nieder: {
-      name: "Nieder et al. : récupération rapide",
-      details: `0 % : 0 à 3 mois\n~17 % : 4 mois\n~25 % : 5 mois\n~28 % : 6 mois\n~33 % : 7 mois\n~37 % : 8 mois\n~40 % : 9 mois\n~45 % : 10 mois\n50 % : 11 à 12 mois et plateau`,
-    },
-    abusaris: {
-      name: "Abusaris et al. : récupération rapide",
-      details: `0 % < 6 mois\n25 % : 6–12 mois\n50 % : > 12 mois`,
-    },
-    noel: {
-      name: "Noël et al. : récupération lente",
-      details: `0 % avant 1 an\n5 % : 1 an\n~10 % : 2 ans\n~15 % : 3 ans\n~20 % : 4 ans\n~25 % : 5 ans\n~30 % : 6 ans\n~35 % : 7 ans\n~40 % : 8 ans\n~45 % : 9 ans\n50 % : 10 ans et plateau`,
-    },
+  const calcDoseFrac = (doseTot, nbFrac) => {
+    if (!doseTot || !nbFrac || nbFrac === 0) return "";
+    return parseFloat(doseTot) / parseFloat(nbFrac);
   };
 
-  // Fonction calcul champ manquant (section autorisée)
-  const handleCalcMissingAuth = () => {
-    if (totalDoseAuth && numFractionsAuth && !dosePerFractionAuth) {
-      setDosePerFractionAuth((totalDoseAuth / numFractionsAuth).toFixed(2));
-    } else if (totalDoseAuth && dosePerFractionAuth && !numFractionsAuth) {
-      setNumFractionsAuth((totalDoseAuth / dosePerFractionAuth).toFixed(2));
-    } else if (dosePerFractionAuth && numFractionsAuth && !totalDoseAuth) {
-      setTotalDoseAuth((dosePerFractionAuth * numFractionsAuth).toFixed(2));
+  const calcNbFrac = (doseTot, doseFrac) => {
+    if (!doseTot || !doseFrac || doseFrac === 0) return "";
+    return parseFloat(doseTot) / parseFloat(doseFrac);
+  };
+
+  const calcBED = (d, f, ab) => {
+    if (!d || !f || !ab) return null;
+    return d * (1 + f / ab);
+  };
+
+  const calcEQD2 = (bed, ab) => {
+    if (!bed || !ab) return null;
+    return bed / (1 + 2 / ab);
+  };
+
+  const handleStep1Change = (field, value) => {
+    let s = { ...step1, [field]: value };
+
+    if (s.autoCalc) {
+      if (field === "nbFrac" && s.doseTot && s.nbFrac) {
+        s.doseFrac = calcDoseFrac(s.doseTot, s.nbFrac);
+      } else if (field === "doseFrac" && s.doseTot && s.doseFrac) {
+        s.nbFrac = calcNbFrac(s.doseTot, s.doseFrac);
+      }
+    }
+    setStep1(s);
+    if (s.doseTot && s.doseFrac && s.alphaBeta) {
+      const bed = calcBED(parseFloat(s.doseTot), parseFloat(s.doseFrac), parseFloat(s.alphaBeta));
+      setBedAutorisee(bed);
     }
   };
 
-  // Blocage doses < 1.8 Gy
-  const handleDosePerFractionChange = (value, setter) => {
-    if (value === "" || parseFloat(value) >= 1.8) {
-      setter(value);
+  const handleStep2Change = (field, value) => {
+    let s = { ...step2, [field]: value };
+
+    if (s.autoCalc) {
+      if (field === "nbFrac" && s.doseTot && s.nbFrac) {
+        s.doseFrac = calcDoseFrac(s.doseTot, s.nbFrac);
+      } else if (field === "doseFrac" && s.doseTot && s.doseFrac) {
+        s.nbFrac = calcNbFrac(s.doseTot, s.doseFrac);
+      }
+    }
+    setStep2(s);
+    if (s.doseTot && s.doseFrac && step1.alphaBeta) {
+      const bed = calcBED(parseFloat(s.doseTot), parseFloat(s.doseFrac), parseFloat(step1.alphaBeta));
+      setBedUtilisee(bed);
+      if (bedAutorisee) {
+        const restante = bedAutorisee - bed;
+        setBedRestante(restante);
+        setEqd2Restante(calcEQD2(restante, parseFloat(step1.alphaBeta)));
+      }
     }
   };
 
-  // Tooltip toggle
-  const toggleTooltip = (key) => {
-    setShowTooltip(showTooltip === key ? null : key);
+  const handleRecupChange = (m) => {
+    setMoisEcoules(m);
+    let recup = 0;
+    const mois = parseInt(m);
+
+    if (modeleRecup === "Paradis") {
+      if (mois <= 3) recup = 0;
+      else if (mois <= 6) recup = 10;
+      else if (mois <= 12) recup = 25;
+      else recup = 50;
+    } else if (modeleRecup === "Nieder") {
+      if (mois <= 3) recup = 0;
+      else if (mois === 4) recup = 17;
+      else if (mois === 5) recup = 25;
+      else if (mois === 6) recup = 28;
+      else if (mois === 7) recup = 33;
+      else if (mois === 8) recup = 37;
+      else if (mois === 9) recup = 40;
+      else if (mois === 10) recup = 45;
+      else recup = 50;
+    } else if (modeleRecup === "Abusaris") {
+      if (mois < 6) recup = 0;
+      else if (mois < 12) recup = 25;
+      else recup = 50;
+    } else if (modeleRecup === "Noel") {
+      if (mois < 12) recup = 0;
+      else if (mois === 12) recup = 5;
+      else if (mois === 24) recup = 10;
+      else if (mois === 36) recup = 15;
+      else if (mois === 48) recup = 20;
+      else if (mois === 60) recup = 25;
+      else if (mois === 72) recup = 30;
+      else if (mois === 84) recup = 35;
+      else if (mois === 96) recup = 40;
+      else if (mois === 108) recup = 45;
+      else recup = 50;
+    }
+
+    setPourcentRecup(recup);
+    if (bedRestante) {
+      const bedAdj = bedRestante * (1 + recup / 100);
+      setBedRestante(bedAdj);
+      setEqd2Restante(calcEQD2(bedAdj, parseFloat(step1.alphaBeta)));
+    }
   };
 
   return (
     <div className="container">
-      <h1 className="title">BED Simulator</h1>
+      <h1>Calculateur BED / EQD2</h1>
 
-      {/* 1. BED totale autorisée */}
+      {/* Étape 1 */}
       <section>
-        <h2>1. BED totale autorisée</h2>
-        <input
-          type="number"
-          placeholder="Dose totale (Gy)"
-          value={totalDoseAuth}
-          onChange={(e) => setTotalDoseAuth(e.target.value)}
-        />
-        <input
-          type="number"
-          placeholder="Nombre de fractions"
-          value={numFractionsAuth}
-          onChange={(e) => setNumFractionsAuth(e.target.value)}
-        />
-        <div className="inline-input">
-          <input
-            type="number"
-            placeholder="Dose par fraction (Gy)"
-            value={dosePerFractionAuth}
-            onChange={(e) =>
-              handleDosePerFractionChange(e.target.value, setDosePerFractionAuth)
-            }
-          />
-          <button onClick={handleCalcMissingAuth}>Calculer le champ manquant</button>
-        </div>
-        <input
-          type="number"
-          placeholder="Alpha/Beta (Gy)"
-          value={alphaBetaAuth}
-          onChange={(e) => setAlphaBetaAuth(e.target.value)}
-        />
-        <input
-          type="number"
-          placeholder="OU BED autorisée (saisie manuelle)"
-          value={manualBEDAuth}
-          onChange={(e) => setManualBEDAuth(e.target.value)}
-        />
+        <h2>1️⃣ BED autorisée</h2>
+        <select onChange={(e) => handleStep1Change("alphaBeta", organAlphaBeta[e.target.value])}>
+          <option value="">-- Choisir un organe --</option>
+          {Object.keys(organAlphaBeta).map((org) => (
+            <option key={org}>{org}</option>
+          ))}
+        </select>
+        <input type="number" placeholder="Dose totale" value={step1.doseTot} onChange={(e) => handleStep1Change("doseTot", e.target.value)} />
+        <input type="number" placeholder="Dose/fraction" value={step1.doseFrac} onChange={(e) => handleStep1Change("doseFrac", e.target.value)} />
+        <input type="number" placeholder="Nombre de fractions" value={step1.nbFrac} onChange={(e) => handleStep1Change("nbFrac", e.target.value)} />
+        {bedAutorisee && <p>BED autorisée : {bedAutorisee.toFixed(2)} Gy</p>}
       </section>
 
-      {/* 2. BED utilisée */}
+      {/* Étape 2 */}
       <section>
-        <h2>2. BED utilisée</h2>
-        <input
-          type="number"
-          placeholder="Dose totale reçue (Gy)"
-          value={totalDoseUsed}
-          onChange={(e) => setTotalDoseUsed(e.target.value)}
-        />
-        <input
-          type="number"
-          placeholder="Nombre de fractions"
-          value={numFractionsUsed}
-          onChange={(e) => setNumFractionsUsed(e.target.value)}
-        />
-        <input
-          type="number"
-          placeholder="Alpha/Beta (Gy)"
-          value={alphaBetaUsed}
-          onChange={(e) => setAlphaBetaUsed(e.target.value)}
-        />
-        <input
-          type="number"
-          placeholder="Dose par fraction (calculée)"
-          value={dosePerFractionUsed}
-          onChange={(e) =>
-            handleDosePerFractionChange(e.target.value, setDosePerFractionUsed)
-          }
-        />
-        <input
-          type="number"
-          placeholder="OU BED utilisée (saisie manuelle)"
-          value={manualBEDUsed}
-          onChange={(e) => setManualBEDUsed(e.target.value)}
-        />
+        <h2>2️⃣ BED utilisée</h2>
+        <input type="number" placeholder="Dose totale" value={step2.doseTot} onChange={(e) => handleStep2Change("doseTot", e.target.value)} />
+        <input type="number" placeholder="Dose/fraction" value={step2.doseFrac} onChange={(e) => handleStep2Change("doseFrac", e.target.value)} />
+        <input type="number" placeholder="Nombre de fractions" value={step2.nbFrac} onChange={(e) => handleStep2Change("nbFrac", e.target.value)} />
+        {bedUtilisee && <p>BED utilisée : {bedUtilisee.toFixed(2)} Gy</p>}
       </section>
 
-      {/* 3. Modèles de récupération */}
-      <section>
-        <h2>3. Modèle de récupération</h2>
-        {Object.entries(recoveryModels).map(([key, model]) => (
-          <div key={key} className="model-line">
-            <label>
-              <input
-                type="radio"
-                name="model"
-                value={key}
-                checked={selectedModel === key}
-                onChange={() => setSelectedModel(key)}
-              />
-              {model.name}
-            </label>
-            <button
-              className="tooltip-btn"
-              onClick={() => toggleTooltip(key)}
-              title="Voir détails"
-            >
-              ℹ
-            </button>
-            {showTooltip === key && (
-              <div className="tooltip-box">
-                <pre>{model.details}</pre>
-              </div>
-            )}
-          </div>
-        ))}
-      </section>
+      {/* Résultats */}
+      {bedRestante !== null && (
+        <section>
+          <h2>3️⃣ Résultats</h2>
+          <p>BED restante : {bedRestante.toFixed(2)} Gy</p>
+          {eqd2Restante && <p>EQD2 restante : {eqd2Restante.toFixed(2)} Gy</p>}
+        </section>
+      )}
     </div>
   );
 }
