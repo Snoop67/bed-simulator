@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-// Pour jspdf v2.x
+// jspdf v2.x : import avec accolades
 import { jsPDF } from "jspdf";
 import "./index.css";
 
@@ -39,7 +39,7 @@ function App() {
 
   const num = (x) => (isNaN(parseFloat(x)) ? "" : parseFloat(x));
 
-  // BED et EQD2
+  // Calcul BED et EQD2
   useEffect(() => {
     if (n && d && (manualAlphaBeta || alphaBeta)) {
       const abVal = num(manualAlphaBeta) || num(alphaBeta);
