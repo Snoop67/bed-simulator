@@ -1,63 +1,104 @@
+/* reset simple */
+* { box-sizing: border-box; }
+
+/* page */
 body {
-  font-family: Arial, sans-serif;
-  background: #f5f9ff;
-  color: #222;
-  padding: 20px;
+  font-family: "Inter", Arial, sans-serif;
+  background: #f3f8ff;
+  margin: 0;
+  padding: 30px;
+  color: #123;
 }
 
-.container {
-  max-width: 800px;
-  margin: auto;
-  background: white;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+/* card */
+.app-wrap { max-width: 1100px; margin: 0 auto; }
+.card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 30px rgba(10,30,80,0.06);
+  padding: 28px;
 }
 
-h1 {
+/* title */
+.main-title {
   text-align: center;
-  color: #0056b3;
+  color: #1355b8;
+  margin: 0 0 18px 0;
+  font-size: 34px;
 }
 
-section {
-  margin-bottom: 25px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #ddd;
+/* sections */
+.section { margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid #e6eefc; }
+.section h2 { color: #1355b8; margin: 0 0 12px 0; font-size: 20px; }
+
+/* layout rows */
+.row { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+.row .input, .row .select-organ { flex: 1; }
+
+/* inputs */
+.input, select {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #d0d7e8;
+  background: white;
+  font-size: 14px;
 }
 
-input, select {
-  padding: 8px;
-  margin: 5px;
-  border: 1px solid #bbb;
-  border-radius: 5px;
-}
+/* organ select has fixed width */
+.select-organ { width: 260px; }
 
-input:focus, select:focus {
-  outline: none;
-  border-color: #0056b3;
-}
+/* alpha input smaller */
+.input.alpha { width: 140px; }
 
-p {
-  font-weight: bold;
-}
-
-.tooltip {
-  position: relative;
-  cursor: help;
-  color: #0056b3;
-  text-decoration: underline dotted;
-}
-
-.tooltip:hover::after {
-  content: attr(data-tip);
-  position: absolute;
-  left: 0;
-  top: 25px;
-  background: #0056b3;
+/* buttons */
+.btn {
+  background: #1e6fff;
   color: white;
-  padding: 8px;
-  border-radius: 5px;
-  width: 250px;
-  font-size: 0.9em;
-  z-index: 10;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.btn.ghost { background: #fff; color: #1e6fff; border: 1px solid #d0d7e8; }
+
+/* inline label+checkbox */
+.inline-checkbox { margin-left: 12px; display: inline-flex; align-items: center; gap: 8px; }
+
+/* results box */
+.results-box {
+  margin-top: 10px;
+  padding: 12px;
+  background: linear-gradient(180deg, #f6fbff 0%, #eef6ff 100%);
+  border-left: 4px solid #0b5ed7;
+  border-radius: 8px;
+}
+
+/* wide input under results */
+.input.wide { width: 100%; margin-top: 8px; }
+
+/* model list and tooltip */
+.model-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.model-row { display: flex; align-items: center; gap: 8px; }
+.info-btn {
+  width: 28px; height: 28px; border-radius: 6px;
+  background: #1e6fff; color: white; border: none; cursor: pointer;
+}
+.tooltip {
+  margin-top: 6px; background: #f0f6ff; border: 1px solid #cfe3ff;
+  padding: 8px; border-radius: 8px; white-space: pre-wrap; color: #123;
+}
+
+/* history */
+.history-box { margin-top: 12px; }
+.history-item { padding: 10px; border-radius: 8px; background: #fbfdff; border: 1px solid #eef6ff; margin-bottom: 8px; }
+
+/* small helpers */
+.top-gap { margin-top: 12px; }
+.link { color: #1355b8; text-decoration: none; }
+.link:hover { text-decoration: underline; }
+
+/* responsive */
+@media (max-width: 880px) {
+  .row { flex-direction: column; }
+  .select-organ { width: 100%; }
 }
