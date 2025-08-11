@@ -1,7 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import jsPDF from "jspdf";
 import "./index.css";
 
-const organAlphaBeta = {
+/**
+ * App.jsx
+ * Version consolidée : calcul BED/EQD2 + modèles avec tooltips + bouton "Calculer le champ manquant"
+ * - Blocage doses < 1.8 Gy pour autorisée/utilisée (case alignée)
+ * - Sauvegarde / historique / export PDF
+ */
+
+const OAR_ALPHA = {
+  "": "",
   "Moelle épinière": 2,
   "Tronc cérébral": 2,
   "Nerf optique": 2,
@@ -31,161 +40,223 @@ const organAlphaBeta = {
   "Os cortical": 2,
   "Tête fémorale": 2,
   "Testicules": 2,
-  "Ovaires": 3,
+  "Ovaires": 3
 };
 
-export default function App() {
-  const [step1, setStep1] = useState({ doseTot: "", doseFrac: "", nbFrac: "", alphaBeta: "", autoCalc: true });
-  const [step2, setStep2] = useState({ doseTot: "", doseFrac: "", nbFrac: "", autoCalc: true });
-  const [bedAutorisee, setBedAutorisee] = useState(null);
-  const [bedUtilisee, setBedUtilisee] = useState(null);
-  const [bedRestante, setBedRestante] = useState(null);
-  const [eqd2Restante, setEqd2Restante] = useState(null);
-  const [modeleRecup, setModeleRecup] = useState("");
-  const [moisEcoules, setMoisEcoules] = useState("");
-  const [pourcentRecup, setPourcentRecup] = useState(0);
+const RECOVERY_MODELS = {
+  paradis: {
+    label: "Paradis et al. : récupération rapide",
+    details:
+`0–3 mois  : 0 %
+4–6 mois  : 10 %
+7–12 mois : 25 %
+≥ 12 mois : 50 % (plateau)`
+  },
+  nieder: {
+    label: "Nieder et al. : récupération rapide",
+    details:
+`0 % : 0 à 3 mois
+~17 % : 4 mois
+~25 % : 5 mois
+~28 % : 6 mois
+~33 % : 7 mois
+~37 % : 8 mois
+~40 % : 9 mois
+~45 % : 10 mois
+50 % : 11 à 12 mois et plateau`
+  },
+  abusaris: {
+    label: "Abusaris et al. : récupération rapide",
+    details:
+`0 % < 6m
+25 % : 6–12m
+50 % : >12m`
+  },
+  noel: {
+    label: "Noël et al. : récupération lente",
+    details:
+`0 % avant 1 an
+5 % : 1 an
+~10 % : 2 ans
+~15 % : 3 ans
+~20 % : 4 ans
+~25 % : 5 ans
+~30 % : 6 ans
+~35 % : 7 ans
+~40 % : 8 ans
+~45 % : 9 ans
+50 % : 10 ans et plateau`
+  }
+};
 
-  const calcDoseFrac = (doseTot, nbFrac) => {
-    if (!doseTot || !nbFrac || nbFrac === 0) return "";
-    return parseFloat(doseTot) / parseFloat(nbFrac);
-  };
-
-  const calcNbFrac = (doseTot, doseFrac) => {
-    if (!doseTot || !doseFrac || doseFrac === 0) return "";
-    return parseFloat(doseTot) / parseFloat(doseFrac);
-  };
-
-  const calcBED = (d, f, ab) => {
-    if (!d || !f || !ab) return null;
-    return d * (1 + f / ab);
-  };
-
-  const calcEQD2 = (bed, ab) => {
-    if (!bed || !ab) return null;
-    return bed / (1 + 2 / ab);
-  };
-
-  const handleStep1Change = (field, value) => {
-    let s = { ...step1, [field]: value };
-
-    if (s.autoCalc) {
-      if (field === "nbFrac" && s.doseTot && s.nbFrac) {
-        s.doseFrac = calcDoseFrac(s.doseTot, s.nbFrac);
-      } else if (field === "doseFrac" && s.doseTot && s.doseFrac) {
-        s.nbFrac = calcNbFrac(s.doseTot, s.doseFrac);
-      }
-    }
-    setStep1(s);
-    if (s.doseTot && s.doseFrac && s.alphaBeta) {
-      const bed = calcBED(parseFloat(s.doseTot), parseFloat(s.doseFrac), parseFloat(s.alphaBeta));
-      setBedAutorisee(bed);
-    }
-  };
-
-  const handleStep2Change = (field, value) => {
-    let s = { ...step2, [field]: value };
-
-    if (s.autoCalc) {
-      if (field === "nbFrac" && s.doseTot && s.nbFrac) {
-        s.doseFrac = calcDoseFrac(s.doseTot, s.nbFrac);
-      } else if (field === "doseFrac" && s.doseTot && s.doseFrac) {
-        s.nbFrac = calcNbFrac(s.doseTot, s.doseFrac);
-      }
-    }
-    setStep2(s);
-    if (s.doseTot && s.doseFrac && step1.alphaBeta) {
-      const bed = calcBED(parseFloat(s.doseTot), parseFloat(s.doseFrac), parseFloat(step1.alphaBeta));
-      setBedUtilisee(bed);
-      if (bedAutorisee) {
-        const restante = bedAutorisee - bed;
-        setBedRestante(restante);
-        setEqd2Restante(calcEQD2(restante, parseFloat(step1.alphaBeta)));
-      }
-    }
-  };
-
-  const handleRecupChange = (m) => {
-    setMoisEcoules(m);
-    let recup = 0;
-    const mois = parseInt(m);
-
-    if (modeleRecup === "Paradis") {
-      if (mois <= 3) recup = 0;
-      else if (mois <= 6) recup = 10;
-      else if (mois <= 12) recup = 25;
-      else recup = 50;
-    } else if (modeleRecup === "Nieder") {
-      if (mois <= 3) recup = 0;
-      else if (mois === 4) recup = 17;
-      else if (mois === 5) recup = 25;
-      else if (mois === 6) recup = 28;
-      else if (mois === 7) recup = 33;
-      else if (mois === 8) recup = 37;
-      else if (mois === 9) recup = 40;
-      else if (mois === 10) recup = 45;
-      else recup = 50;
-    } else if (modeleRecup === "Abusaris") {
-      if (mois < 6) recup = 0;
-      else if (mois < 12) recup = 25;
-      else recup = 50;
-    } else if (modeleRecup === "Noel") {
-      if (mois < 12) recup = 0;
-      else if (mois === 12) recup = 5;
-      else if (mois === 24) recup = 10;
-      else if (mois === 36) recup = 15;
-      else if (mois === 48) recup = 20;
-      else if (mois === 60) recup = 25;
-      else if (mois === 72) recup = 30;
-      else if (mois === 84) recup = 35;
-      else if (mois === 96) recup = 40;
-      else if (mois === 108) recup = 45;
-      else recup = 50;
-    }
-
-    setPourcentRecup(recup);
-    if (bedRestante) {
-      const bedAdj = bedRestante * (1 + recup / 100);
-      setBedRestante(bedAdj);
-      setEqd2Restante(calcEQD2(bedAdj, parseFloat(step1.alphaBeta)));
-    }
-  };
-
-  return (
-    <div className="container">
-      <h1>Calculateur BED / EQD2</h1>
-
-      {/* Étape 1 */}
-      <section>
-        <h2>1️⃣ BED autorisée</h2>
-        <select onChange={(e) => handleStep1Change("alphaBeta", organAlphaBeta[e.target.value])}>
-          <option value="">-- Choisir un organe --</option>
-          {Object.keys(organAlphaBeta).map((org) => (
-            <option key={org}>{org}</option>
-          ))}
-        </select>
-        <input type="number" placeholder="Dose totale" value={step1.doseTot} onChange={(e) => handleStep1Change("doseTot", e.target.value)} />
-        <input type="number" placeholder="Dose/fraction" value={step1.doseFrac} onChange={(e) => handleStep1Change("doseFrac", e.target.value)} />
-        <input type="number" placeholder="Nombre de fractions" value={step1.nbFrac} onChange={(e) => handleStep1Change("nbFrac", e.target.value)} />
-        {bedAutorisee && <p>BED autorisée : {bedAutorisee.toFixed(2)} Gy</p>}
-      </section>
-
-      {/* Étape 2 */}
-      <section>
-        <h2>2️⃣ BED utilisée</h2>
-        <input type="number" placeholder="Dose totale" value={step2.doseTot} onChange={(e) => handleStep2Change("doseTot", e.target.value)} />
-        <input type="number" placeholder="Dose/fraction" value={step2.doseFrac} onChange={(e) => handleStep2Change("doseFrac", e.target.value)} />
-        <input type="number" placeholder="Nombre de fractions" value={step2.nbFrac} onChange={(e) => handleStep2Change("nbFrac", e.target.value)} />
-        {bedUtilisee && <p>BED utilisée : {bedUtilisee.toFixed(2)} Gy</p>}
-      </section>
-
-      {/* Résultats */}
-      {bedRestante !== null && (
-        <section>
-          <h2>3️⃣ Résultats</h2>
-          <p>BED restante : {bedRestante.toFixed(2)} Gy</p>
-          {eqd2Restante && <p>EQD2 restante : {eqd2Restante.toFixed(2)} Gy</p>}
-        </section>
-      )}
-    </div>
-  );
+function safeNum(v) {
+  if (v === "" || v === null || v === undefined) return NaN;
+  const s = String(v).trim().replace(",", ".");
+  if (s === "") return NaN;
+  return Number(s);
 }
+
+export default function App() {
+  // Step1 autorisée
+  const [organ, setOrgan] = useState("");
+  const [alphaBeta, setAlphaBeta] = useState("");
+  const [totalAuth, setTotalAuth] = useState("");
+  const [nAuth, setNAuth] = useState("");
+  const [dpfAuth, setDpfAuth] = useState("");
+  const [manualBedAuth, setManualBedAuth] = useState("");
+
+  // Step2 utilisée
+  const [totalUsed, setTotalUsed] = useState("");
+  const [nUsed, setNUsed] = useState("");
+  const [dpfUsed, setDpfUsed] = useState("");
+  const [manualBedUsed, setManualBedUsed] = useState("");
+
+  // Block <1.8
+  const [blockBelow18, setBlockBelow18] = useState(false);
+
+  // Step3 oubli / dates / model
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [monthsElapsed, setMonthsElapsed] = useState("");
+  const [selectedModel, setSelectedModel] = useState("");
+  const [tooltipKey, setTooltipKey] = useState(null);
+  const [forgetPercent, setForgetPercent] = useState("");
+
+  // Results
+  const [bedAuth, setBedAuth] = useState("");
+  const [eqd2Auth, setEqd2Auth] = useState("");
+  const [physAuth, setPhysAuth] = useState("");
+
+  const [bedUsed, setBedUsed] = useState("");
+  const [eqd2Used, setEqd2Used] = useState("");
+  const [physUsed, setPhysUsed] = useState("");
+
+  const [bedRemain, setBedRemain] = useState("");
+  const [eqd2Remain, setEqd2Remain] = useState("");
+  const [physRemain, setPhysRemain] = useState("");
+
+  // History
+  const [titleSave, setTitleSave] = useState("");
+  const [history, setHistory] = useState([]);
+
+  // ------------------------------
+  // helper : calculate missing field for Step1 (called by button)
+  // ------------------------------
+  function calcMissingAuth() {
+    const t = safeNum(totalAuth);
+    const n = safeNum(nAuth);
+    const d = safeNum(dpfAuth);
+
+    if (!isNaN(t) && !isNaN(n) && (dpfAuth === "" || dpfAuth === null)) {
+      // compute dpf
+      const val = t / n;
+      setDpfAuth(val.toFixed(2));
+      return;
+    }
+    if (!isNaN(t) && !isNaN(d) && (nAuth === "" || nAuth === null)) {
+      const val = t / d;
+      setNAuth(Math.round(val).toString());
+      return;
+    }
+    if (!isNaN(n) && !isNaN(d) && (totalAuth === "" || totalAuth === null)) {
+      const val = n * d;
+      setTotalAuth(val.toFixed(2));
+      return;
+    }
+  }
+
+  // ------------------------------
+  // Step2 calculate dose/fraction automatically if total + n provided (no button)
+  // but we keep ability to edit
+  // ------------------------------
+  useEffect(() => {
+    const t = safeNum(totalUsed);
+    const n = safeNum(nUsed);
+    const d = safeNum(dpfUsed);
+    if (!isNaN(t) && !isNaN(n) && (dpfUsed === "" || dpfUsed === null)) {
+      setDpfUsed((t / n).toFixed(2));
+    }
+  }, [totalUsed, nUsed]);
+
+  // ------------------------------
+  // Step1 calculations: compute BED/EQD2/Phys when user provides required values
+  // - If manualBedAuth provided, use it
+  // - Apply blockBelow18 when calculating (dpf floor = 1.8)
+  // ------------------------------
+  useEffect(() => {
+    const ab = safeNum(alphaBeta);
+    const dpf0 = safeNum(dpfAuth);
+    let dpf = dpf0;
+    const n = safeNum(nAuth);
+    const total = safeNum(totalAuth);
+
+    // if dpf missing but total and n provided, compute dpf for calculation only (do not overwrite)
+    if (isNaN(dpf) && !isNaN(total) && !isNaN(n) && n !== 0) {
+      dpf = total / n;
+    } else if (isNaN(n) && !isNaN(total) && !isNaN(dpf) && dpf !== 0) {
+      // compute n if missing
+      // but do not overwrite user field here; we only want correct calculations
+    }
+
+    if (blockBelow18 && !isNaN(dpf) && dpf < 1.8) {
+      dpf = 1.8;
+    }
+
+    // If manual BED provided, use it for BED auth (and compute EQD2 if ab present)
+    const manualBED = safeNum(manualBedAuth);
+    if (!isNaN(manualBED)) {
+      setBedAuth(manualBED.toFixed(2));
+      if (!isNaN(ab) && ab !== 0) {
+        setEqd2Auth((manualBED / (1 + 2 / ab)).toFixed(2));
+      } else {
+        setEqd2Auth("");
+      }
+      // physical dose: if we have n and dpf (adjusted) compute dpf*n else if total given, use total
+      if (!isNaN(n) && !isNaN(dpf)) {
+        setPhysAuth((dpf * n).toFixed(2));
+      } else if (!isNaN(total)) {
+        setPhysAuth(total.toFixed(2));
+      } else {
+        setPhysAuth("");
+      }
+      return;
+    }
+
+    // calculate BED normally: BED = n * d * (1 + d/ab)
+    if (!isNaN(dpf) && !isNaN(ab) && !isNaN(n) && n !== 0) {
+      const bed = n * dpf * (1 + dpf / ab);
+      setBedAuth(bed.toFixed(2));
+      const eqd2 = bed / (1 + 2 / ab);
+      setEqd2Auth(eqd2.toFixed(2));
+      setPhysAuth((dpf * n).toFixed(2));
+    } else if (!isNaN(total) && !isNaN(dpf) && !isNaN(ab)) {
+      // If user provided total and dpf: derive n = total/dpf (rounded) and calculate using that n
+      if (dpf !== 0) {
+        const ncalc = total / dpf;
+        const bed = ncalc * dpf * (1 + dpf / ab);
+        setBedAuth(bed.toFixed(2));
+        const eqd2 = bed / (1 + 2 / ab);
+        setEqd2Auth(eqd2.toFixed(2));
+        setPhysAuth(total.toFixed(2));
+      }
+    } else {
+      setBedAuth("");
+      setEqd2Auth("");
+      setPhysAuth("");
+    }
+  }, [totalAuth, nAuth, dpfAuth, alphaBeta, manualBedAuth, blockBelow18]);
+
+  // ------------------------------
+  // Step2 calculations for used BED/EQD2/phys
+  // uses alphaBeta from Step1 (global)
+  // ------------------------------
+  useEffect(() => {
+    const ab = safeNum(alphaBeta);
+    let dpf = safeNum(dpfUsed);
+    const n = safeNum(nUsed);
+    const total = safeNum(totalUsed);
+
+    // if dpf missing but total and n provided, compute for calculation
+    if (isNaN(dpf) && !isNaN(total) && !isNaN(n) && n !== 0) {
+      dpf = total / n;
+      // we set but do not overwrite field (we already fill it via o
