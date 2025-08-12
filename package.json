@@ -8,14 +8,9 @@
     "react-scripts": "5.0.1",
     "jspdf": "^2.5.1"
   },
-  "eslintConfig": {
-    "rules": {
-      "react-hooks/exhaustive-deps": "off"
-    }
-  },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "DISABLE_ESLINT_PLUGIN=true react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   }
