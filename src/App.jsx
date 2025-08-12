@@ -1,180 +1,153 @@
 import React, { useState, useEffect } from "react";
-import jsPDF from "jspdf";
-import "./index.css"; // On pointe sur index.css
+import "./index.css";
 
 export default function App() {
+  const organes = [
+    { nom: "Moelle épinière", alphaBeta: 2 },
+    { nom: "Rein", alphaBeta: 1.5 },
+    { nom: "Foie", alphaBeta: 2.5 },
+    { nom: "Poumon", alphaBeta: 3 },
+    { nom: "Peau", alphaBeta: 10 },
+    { nom: "Tumeur", alphaBeta: 10 },
+  ];
+
   const [organe, setOrgane] = useState("");
   const [alphaBeta, setAlphaBeta] = useState("");
   const [doseTotale, setDoseTotale] = useState("");
   const [nbFractions, setNbFractions] = useState("");
-  const [doseParFraction, setDoseParFraction] = useState("");
+  const [doseFraction, setDoseFraction] = useState("");
   const [bedAutorisee, setBedAutorisee] = useState("");
   const [eqd2Autorisee, setEqd2Autorisee] = useState("");
   const [dosePhysiqueAutorisee, setDosePhysiqueAutorisee] = useState("");
-
-  const [doseRecue, setDoseRecue] = useState("");
-  const [fractionsRecues, setFractionsRecues] = useState("");
-  const [doseParFractionRecue, setDoseParFractionRecue] = useState("");
-  const [bedUtilisee, setBedUtilisee] = useState("");
-  const [eqd2Utilisee, setEqd2Utilisee] = useState("");
-
+  const [pourcentageOublie, setPourcentageOublie] = useState("");
   const [bedRestante, setBedRestante] = useState("");
   const [eqd2Restante, setEqd2Restante] = useState("");
+  const [doseFractionMax, setDoseFractionMax] = useState("");
+  const [doseFractionDisponible, setDoseFractionDisponible] = useState("");
 
-  const [nouveauNbFractions, setNouveauNbFractions] = useState("");
-  const [doseMaxFraction, setDoseMaxFraction] = useState("");
-  const [doseTotaleMax, setDoseTotaleMax] = useState("");
+  // Met α/β auto si organe choisi
+  useEffect(() => {
+    if (organe) {
+      const org = organes.find((o) => o.nom === organe);
+      if (org && !alphaBeta) {
+        setAlphaBeta(org.alphaBeta);
+      }
+    }
+  }, [organe]);
 
-  const [historique, setHistorique] = useState([]);
-
-  // Calcul automatique dose par fraction
-  const calculerDoseFraction = () => {
+  // Calcul dose par fraction si total + nb fractions
+  useEffect(() => {
     if (doseTotale && nbFractions) {
-      setDoseParFraction((parseFloat(doseTotale) / parseFloat(nbFractions)).toFixed(2));
+      setDoseFraction(parseFloat(doseTotale) / parseFloat(nbFractions));
     }
-  };
+  }, [doseTotale, nbFractions]);
 
-  const calculerBedEtEqd2Autorisee = () => {
-    if (doseParFraction && nbFractions && alphaBeta) {
-      const bed = parseFloat(nbFractions) * parseFloat(doseParFraction) * (1 + parseFloat(doseParFraction) / parseFloat(alphaBeta));
+  // Calcul BED autorisée
+  useEffect(() => {
+    if (doseTotale && nbFractions && alphaBeta) {
+      const dpf = parseFloat(doseTotale) / parseFloat(nbFractions);
+      const bed = parseFloat(doseTotale) * (1 + dpf / parseFloat(alphaBeta));
       setBedAutorisee(bed.toFixed(2));
-      setEqd2Autorisee((bed / (1 + 2 / parseFloat(alphaBeta))).toFixed(2));
-      setDosePhysiqueAutorisee(parseFloat(doseTotale).toFixed(2));
-    }
-  };
 
-  const calculerBedEtEqd2Utilisee = () => {
-    if (doseRecue && fractionsRecues && alphaBeta) {
-      const dpf = parseFloat(doseRecue) / parseFloat(fractionsRecues);
-      setDoseParFractionRecue(dpf.toFixed(2));
-      const bedU = parseFloat(fractionsRecues) * dpf * (1 + dpf / parseFloat(alphaBeta));
-      setBedUtilisee(bedU.toFixed(2));
-      setEqd2Utilisee((bedU / (1 + 2 / parseFloat(alphaBeta))).toFixed(2));
+      const eqd2 = bed / (1 + 2 / parseFloat(alphaBeta));
+      setEqd2Autorisee(eqd2.toFixed(2));
+      setDosePhysiqueAutorisee(doseTotale);
     }
-  };
+  }, [doseTotale, nbFractions, alphaBeta]);
 
-  const calculerBedEtEqd2Restante = () => {
-    if (bedAutorisee && bedUtilisee) {
-      const bedR = parseFloat(bedAutorisee) - parseFloat(bedUtilisee);
+  // Calcul BED & EQD2 restantes
+  useEffect(() => {
+    if (pourcentageOublie && bedAutorisee) {
+      const bedR = bedAutorisee * (1 - parseFloat(pourcentageOublie) / 100);
       setBedRestante(bedR.toFixed(2));
-      setEqd2Restante((bedR / (1 + 2 / parseFloat(alphaBeta))).toFixed(2));
+
+      const eqd2R = bedR / (1 + 2 / parseFloat(alphaBeta));
+      setEqd2Restante(eqd2R.toFixed(2));
     }
-  };
+  }, [pourcentageOublie, bedAutorisee, alphaBeta]);
 
-  const calculerDoseMaxParFraction = () => {
-    if (bedRestante && nouveauNbFractions && alphaBeta) {
-      const B = parseFloat(bedRestante);
-      const n = parseFloat(nouveauNbFractions);
-      const ab = parseFloat(alphaBeta);
-      const d = (-ab + Math.sqrt(ab * ab + (4 * B * ab) / n)) / 2;
-      setDoseMaxFraction(d.toFixed(2));
-      setDoseTotaleMax((d * n).toFixed(2));
+  // Calcul dose/fraction max & dispo
+  useEffect(() => {
+    if (nbFractions && bedRestante && alphaBeta) {
+      const dpfMax = (parseFloat(bedRestante) / parseFloat(nbFractions)) / (1 + (1 / parseFloat(alphaBeta)));
+      setDoseFractionMax(dpfMax.toFixed(2));
+      setDoseFractionDisponible(dpfMax.toFixed(2));
     }
-  };
-
-  const sauvegarderHistorique = () => {
-    const entree = {
-      organe,
-      bedRestante,
-      eqd2Restante,
-      doseMaxFraction,
-      doseTotaleMax
-    };
-    setHistorique([...historique, entree]);
-  };
-
-  const genererPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("Rapport BED", 20, 20);
-    historique.forEach((item, index) => {
-      doc.text(`${index + 1}. ${item.organe}`, 20, 30 + index * 30);
-      doc.text(`BED restante: ${item.bedRestante} Gy`, 30, 38 + index * 30);
-      doc.text(`EQD2 restante: ${item.eqd2Restante} Gy`, 30, 46 + index * 30);
-      doc.text(`Dose max/fraction: ${item.doseMaxFraction} Gy`, 30, 54 + index * 30);
-      doc.text(`Dose totale max: ${item.doseTotaleMax} Gy`, 30, 62 + index * 30);
-    });
-    doc.save("rapport-bed.pdf");
-  };
+  }, [nbFractions, bedRestante, alphaBeta]);
 
   return (
     <div className="container">
-      <h1>Calculateur BED</h1>
+      <h1>Simulateur BED / EQD2</h1>
 
-      {/* ÉTAPE 1 */}
-      <h2>1. BED totale autorisée</h2>
-      <div className="inline-fields">
-        <label>Organe :</label>
-        <input value={organe} onChange={(e) => setOrgane(e.target.value)} />
-        <label>Alpha/Beta (Gy) :</label>
-        <input value={alphaBeta} onChange={(e) => setAlphaBeta(e.target.value)} />
-      </div>
-
-      <label>Dose totale (Gy) :</label>
-      <input value={doseTotale} onChange={(e) => setDoseTotale(e.target.value)} />
-
-      <label>Nombre de fractions :</label>
-      <input value={nbFractions} onChange={(e) => setNbFractions(e.target.value)} />
-
-      <label>Dose par fraction (Gy) :</label>
-      <input value={doseParFraction} onChange={(e) => setDoseParFraction(e.target.value)} />
-      <button onClick={calculerDoseFraction}>Calculer dose/fraction</button>
-
-      <button onClick={calculerBedEtEqd2Autorisee}>Calculer BED & EQD2</button>
-      <div className="result-box">
-        <p>BED autorisée : {bedAutorisee} Gy</p>
-        <p>EQD2 autorisée : {eqd2Autorisee} Gy</p>
-        <p>Dose physique autorisée : {dosePhysiqueAutorisee} Gy</p>
-      </div>
-
-      {/* ÉTAPE 2 */}
-      <h2>2. BED utilisée</h2>
-      <label>Dose totale reçue (Gy) :</label>
-      <input value={doseRecue} onChange={(e) => setDoseRecue(e.target.value)} />
-
-      <label>Nombre de fractions reçues :</label>
-      <input value={fractionsRecues} onChange={(e) => setFractionsRecues(e.target.value)} />
-
-      <button onClick={calculerBedEtEqd2Utilisee}>Calculer BED utilisée</button>
-      <div className="result-box">
-        <p>Dose par fraction reçue : {doseParFractionRecue} Gy</p>
-        <p>BED utilisée : {bedUtilisee} Gy</p>
-        <p>EQD2 utilisée : {eqd2Utilisee} Gy</p>
-      </div>
-
-      {/* ÉTAPE 3 */}
-      <h2>3. BED restante autorisée</h2>
-      <button onClick={calculerBedEtEqd2Restante}>Calculer BED restante</button>
-      <div className="result-box">
-        <p>BED restante : {bedRestante} Gy</p>
-        <p>EQD2 restante : {eqd2Restante} Gy</p>
-      </div>
-
-      {/* ÉTAPE 4 */}
-      <h2>4. Dose maximale par fraction autorisée</h2>
-      <label>Nombre de fractions prévues :</label>
-      <input value={nouveauNbFractions} onChange={(e) => setNouveauNbFractions(e.target.value)} />
-
-      <button onClick={calculerDoseMaxParFraction}>Calculer dose max/fraction</button>
-      <div className="result-box">
-        <p>Dose max par fraction : {doseMaxFraction} Gy</p>
-        <p>Dose totale max possible : {doseTotaleMax} Gy</p>
-      </div>
-
-      <button onClick={sauvegarderHistorique}>💾 Sauvegarder résultat</button>
-      <button onClick={genererPDF}>📄 Générer PDF</button>
-
-      {/* Historique */}
-      <h2>📘 Résultats enregistrés</h2>
-      {historique.map((item, index) => (
-        <div key={index} className="history-card">
-          <strong>{item.organe}</strong>
-          <p>BED restante : {item.bedRestante} Gy</p>
-          <p>EQD2 restante : {item.eqd2Restante} Gy</p>
-          <p>Dose max/fraction : {item.doseMaxFraction} Gy</p>
-          <p>Dose totale max : {item.doseTotaleMax} Gy</p>
+      {/* Étape 1 */}
+      <div className="section">
+        <h2>1️⃣ Choix de l'organe et paramètres</h2>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <div style={{ flex: 1 }}>
+            <label>Organe</label>
+            <select value={organe} onChange={(e) => setOrgane(e.target.value)}>
+              <option value="">-- Sélectionner --</option>
+              {organes.map((o, i) => (
+                <option key={i} value={o.nom}>
+                  {o.nom}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ width: "150px" }}>
+            <label>α/β (Gy)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={alphaBeta}
+              onChange={(e) => setAlphaBeta(e.target.value)}
+            />
+          </div>
         </div>
-      ))}
+      </div>
+
+      {/* Étape 2 */}
+      <div className="section">
+        <h2>2️⃣ BED autorisée</h2>
+        <label>Dose totale (Gy)</label>
+        <input type="number" value={doseTotale} onChange={(e) => setDoseTotale(e.target.value)} />
+
+        <label>Nombre de fractions</label>
+        <input type="number" value={nbFractions} onChange={(e) => setNbFractions(e.target.value)} />
+
+        {bedAutorisee && (
+          <div className="result-box">
+            <p><strong>BED autorisée :</strong> {bedAutorisee} Gy</p>
+            <p><strong>EQD2 autorisée :</strong> {eqd2Autorisee} Gy</p>
+            <p><strong>Dose physique autorisée :</strong> {dosePhysiqueAutorisee} Gy</p>
+          </div>
+        )}
+      </div>
+
+      {/* Étape 3 */}
+      <div className="section">
+        <h2>3️⃣ Calcul de la dose restante</h2>
+        <label>% de dose oubliée</label>
+        <input type="number" value={pourcentageOublie} onChange={(e) => setPourcentageOublie(e.target.value)} />
+
+        {bedRestante && (
+          <div className="result-box">
+            <p><strong>BED restante :</strong> {bedRestante} Gy</p>
+            <p><strong>EQD2 restante :</strong> {eqd2Restante} Gy</p>
+          </div>
+        )}
+      </div>
+
+      {/* Étape 4 */}
+      <div className="section">
+        <h2>4️⃣ Dose par fraction possible</h2>
+        {doseFractionMax && (
+          <div className="result-box">
+            <p><strong>Dose/fraction maximale possible :</strong> {doseFractionMax} Gy</p>
+            <p><strong>Dose/fraction disponible :</strong> {doseFractionDisponible} Gy</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
