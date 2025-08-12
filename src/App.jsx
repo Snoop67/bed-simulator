@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import jsPDF from "jspdf";
-import "./App.css";
+import "./index.css"; // On pointe sur index.css
 
 export default function App() {
   const [organe, setOrgane] = useState("");
