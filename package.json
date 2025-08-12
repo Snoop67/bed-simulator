@@ -6,9 +6,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "jspdf": "^2.5.1"
-  },
-  "devDependencies": {
+    "jspdf": "^2.5.1",
     "eslint-plugin-react-hooks": "^4.6.2"
   },
   "scripts": {
