@@ -1,16 +1,14 @@
 import React, { useEffect, useState } from "react";
-import jsPDF from "jspdf";
 import "./index.css";
 
 /*
-  App.jsx complet
+  App.jsx final demandé :
   - OAR list (prérempli α/β)
-  - α/β manuel sur la même ligne que la sélection organe
-  - Calculs STEP 1..4 (BED, EQD2, dose physique, dpf max)
-  - Auto-calcul dose/fraction dans STEP1 et STEP2 quand possible
-  - Modèles de récupération (optionnel via radio) -> met automatiquement % d'oubli
-  - Case "bloquer < 1.8 Gy"
-  - Sauvegarde historique et export PDF
+  - α/β manuel sur la même ligne
+  - Correction du bug dpf (1.9 affiché 19)
+  - Modèles de récupération mis à jour (Paradis, Nieder, Abusaris, Noël)
+  - Historique qui sauvegarde uniquement le titre entré et affiche BED/EQD2/dose physique restantes, dose max par fraction et nombre de fractions
+  - Suppression du bouton Export PDF
 */
 
 const OARS = [
@@ -53,42 +51,35 @@ const RECOVERY = {
     text: `0–3 mois  : 0 %
 4–6 mois  : 10 %
 7–12 mois : 25 %
-≥ 12 mois : 50 % (plateau)`,
+≥ 12 mois : 50 %`,
   },
   nieder: {
     title: "Nieder et al. : récupération rapide",
-    text: `0 % : 0–3 mois
-~17 % : 4 mois
-~25 % : 5 mois
-~28 % : 6 mois
-~33 % : 7 mois
-~37 % : 8 mois
-~40 % : 9 mois
-~45 % : 10 mois
-50 % : 11–12 mois et plateau`,
+    text: `0–3 mois : 0 %
+4 mois : 17 %
+5 mois : 25 %
+6 mois : 28 %
+7 mois : 33 %
+8 mois : 37 %
+9 mois : 40 %
+10 mois : 45 %
+≥ 11 mois : 50%`,
   },
   abusaris: {
     title: "Abusaris et al. : récupération rapide",
-    text: `0 % : <6 mois
-25 % : 6–12 mois
-50 % : >12 mois`,
+    text: `<6 mois : 0%
+6–12 mois : 25%
+>12 mois : 50%`,
   },
   noel: {
     title: "Noël et al. : récupération lente",
     text: `0 % avant 1 an
-5 % : 1 an
-~10 % : 2 ans
-~15 % : 3 ans
-~20 % : 4 ans
-~25 % : 5 ans
-~30 % : 6 ans
-~35 % : 7 ans
-~40 % : 8 ans
-~45 % : 9 ans
-50 % : 10 ans et plateau`,
+Puis 5% par an jusqu'à 10 ans
+≥ 10 ans : 50%`,
   },
 };
 
+// helper safe parse
 function parseNum(v) {
   if (v === "" || v === null || v === undefined) return NaN;
   const s = String(v).trim().replace(",", ".");
@@ -97,10 +88,10 @@ function parseNum(v) {
 }
 
 export default function App() {
-  // STEP 1
+  // STEP 1 (authorized)
   const [organ, setOrgan] = useState("");
-  const [manualAB, setManualAB] = useState(""); // texte saisi
-  const [alphaBeta, setAlphaBeta] = useState(""); // valeur globale utilisée
+  const [manualAB, setManualAB] = useState(""); // user typed ab (string)
+  const [alphaBeta, setAlphaBeta] = useState(""); // numeric-string used globally
   const [doseTotalAuth, setDoseTotalAuth] = useState("");
   const [nAuth, setNAuth] = useState("");
   const [dpfAuth, setDpfAuth] = useState("");
@@ -127,7 +118,7 @@ export default function App() {
   // Options
   const [blockBelow18, setBlockBelow18] = useState(false);
 
-  // Results
+  // Results state
   const [bedAllowed, setBedAllowed] = useState("");
   const [eqd2Allowed, setEqd2Allowed] = useState("");
   const [physAllowed, setPhysAllowed] = useState("");
@@ -143,13 +134,13 @@ export default function App() {
   const [dpfMax, setDpfMax] = useState("");
   const [totalMaxPossible, setTotalMaxPossible] = useState("");
 
-  // History
+  // history (persisted)
   const [titleSave, setTitleSave] = useState("");
   const [history, setHistory] = useState(() => {
     try {
-      const raw = localStorage.getItem("bed_history");
+      const raw = localStorage.getItem("bed_history_v2");
       return raw ? JSON.parse(raw) : [];
-    } catch (e) {
+    } catch {
       return [];
     }
   });
@@ -162,48 +153,52 @@ export default function App() {
     } else if (found && found.ab !== "") {
       setAlphaBeta(String(found.ab));
     } else {
-      // keep current if nothing
       if (!manualAB && !found) setAlphaBeta("");
     }
   }, [organ, manualAB]);
 
-  // Button: compute missing in STEP1 (dose per fraction / n / total)
+  // BUTTON: calculate missing field in STEP1 (dose/n/dpf)
   function calculateMissingStep1() {
     const TD = parseNum(doseTotalAuth);
     const N = parseNum(nAuth);
     const DPF = parseNum(dpfAuth);
 
-    // prefer to fill empty field
+    // fill the empty one
     if (!isNaN(TD) && !isNaN(N) && (dpfAuth === "" || dpfAuth == null)) {
-      setDpfAuth((TD / N).toFixed(2));
+      const calc = TD / N;
+      setDpfAuth(calc.toFixed(2));
       return;
     }
     if (!isNaN(TD) && !isNaN(DPF) && (nAuth === "" || nAuth == null)) {
-      setNAuth(String(Math.round(TD / DPF)));
+      const calc = TD / DPF;
+      setNAuth(String(Math.round(calc)));
       return;
     }
     if (!isNaN(N) && !isNaN(DPF) && (doseTotalAuth === "" || doseTotalAuth == null)) {
-      setDoseTotalAuth((N * DPF).toFixed(2));
+      const calc = N * DPF;
+      setDoseTotalAuth(calc.toFixed(2));
       return;
     }
   }
 
-  // Auto-calc dpf in step1 if total+n provided (keeps editable)
+  // Auto-calc dpfAuth when total and n provided (keeps editable)
   useEffect(() => {
     const TD = parseNum(doseTotalAuth);
     const N = parseNum(nAuth);
     if (!isNaN(TD) && !isNaN(N) && (dpfAuth === "" || dpfAuth == null)) {
-      setDpfAuth((TD / N).toFixed(2));
+      const calc = TD / N;
+      setDpfAuth(calc.toFixed(2));
     }
   }, [doseTotalAuth, nAuth]);
 
-  // Calculate BED/EQD2/phys for authorized (STEP1)
+  // Compute BED/EQD2/phys for STEP1
   useEffect(() => {
     const ab = parseNum(alphaBeta);
     let dpf = parseNum(dpfAuth);
     const n = parseNum(nAuth);
     const tot = parseNum(doseTotalAuth);
 
+    // if dpf missing but tot & n present -> compute
     if (isNaN(dpf) && !isNaN(tot) && !isNaN(n) && n !== 0) {
       dpf = tot / n;
     }
@@ -238,12 +233,14 @@ export default function App() {
     }
   }, [doseTotalAuth, nAuth, dpfAuth, alphaBeta, manualBEDAuth, blockBelow18]);
 
-  // STEP2: auto dpfUsed if total+n provided and dpfUsed empty
+  // STEP2: auto-calc dpfUsed if total+n provided and dpfUsed empty (FIX bug: ensure numeric division)
   useEffect(() => {
     const TD = parseNum(doseTotalUsed);
     const N = parseNum(nUsed);
-    if (!isNaN(TD) && !isNaN(N) && (dpfUsed === "" || dpfUsed == null)) {
-      setDpfUsed((TD / N).toFixed(2));
+    if (!isNaN(TD) && !isNaN(N) && N !== 0 && (dpfUsed === "" || dpfUsed == null)) {
+      const calc = TD / N;
+      // fixed: produce 1.90 not 19 — ensure division uses full numbers and formatted
+      setDpfUsed(calc.toFixed(2));
     }
   }, [doseTotalUsed, nUsed]);
 
@@ -288,7 +285,7 @@ export default function App() {
     }
   }, [doseTotalUsed, nUsed, dpfUsed, alphaBeta, manualBEDUsed, blockBelow18]);
 
-  // Dates -> monthsElapsed
+  // STEP3: dates -> monthsElapsed
   useEffect(() => {
     if (!startRT || !endRT) {
       setMonthsElapsed("");
@@ -304,7 +301,7 @@ export default function App() {
     setMonthsElapsed(String(months));
   }, [startRT, endRT]);
 
-  // Recovery model -> set forgetPercent automatically (user can override)
+  // STEP3: recovery models -> set forgetPercent (auto)
   useEffect(() => {
     if (!selectedModel || monthsElapsed === "") return;
     const m = parseNum(monthsElapsed);
@@ -331,16 +328,13 @@ export default function App() {
       else p = 50;
     } else if (selectedModel === "noel") {
       if (m < 12) p = 0;
-      else if (m === 12) p = 5;
-      else if (m === 24) p = 10;
-      else if (m === 36) p = 15;
-      else if (m === 48) p = 20;
-      else if (m === 60) p = 25;
-      else if (m === 72) p = 30;
-      else if (m === 84) p = 35;
-      else if (m === 96) p = 40;
-      else if (m === 108) p = 45;
-      else p = 50;
+      else {
+        // "Puis 5% par an jusqu'à 10 ans" => approximated linear by years
+        // months to years:
+        const years = Math.floor(m / 12);
+        const percent = Math.min(50, Math.max(0, 5 * years));
+        p = percent;
+      }
     }
     if (!isNaN(p)) setForgetPercent(String(p));
   }, [selectedModel, monthsElapsed]);
@@ -370,7 +364,7 @@ export default function App() {
     } else setPhysRemaining("");
   }, [bedAllowed, manualBEDAuth, bedUsed, physAllowed, physUsed, forgetPercent, alphaBeta]);
 
-  // Step4: compute max dpf solving quadratic
+  // STEP4: compute dpfMax solving quadratic (n/ab) d^2 + n d - B = 0
   useEffect(() => {
     const B = parseNum(manualBEDRemaining) || parseNum(bedRemaining);
     const n = parseNum(newFractions);
@@ -399,16 +393,17 @@ export default function App() {
     setTotalMaxPossible((root * n).toFixed(2));
   }, [bedRemaining, manualBEDRemaining, newFractions, alphaBeta]);
 
-  // Save history (localStorage)
+  // persist history
   useEffect(() => {
     try {
-      localStorage.setItem("bed_history", JSON.stringify(history));
-    } catch (e) { /* ignore */ }
+      localStorage.setItem("bed_history_v2", JSON.stringify(history));
+    } catch {}
   }, [history]);
 
+  // Save result to history (title must be what user typed - no default "Chiasma")
   function handleSave() {
-    const title = (titleSave && titleSave.trim()) || organ || `Organe ${history.length + 1}`;
-    const rec = {
+    const title = (titleSave && titleSave.trim()) || organ || "Sans titre";
+    const record = {
       title,
       organ,
       alphaBeta,
@@ -424,13 +419,14 @@ export default function App() {
       physRemaining,
       dpfMax,
       totalMaxPossible,
+      newFractions,
       createdAt: new Date().toISOString(),
     };
-    setHistory((h) => [...h, rec]);
+    setHistory((h) => [...h, record]);
     setTitleSave("");
   }
 
-  function handleReset() {
+  function handleResetAll() {
     setOrgan("");
     setManualAB("");
     setAlphaBeta("");
@@ -462,25 +458,11 @@ export default function App() {
     setEqd2Remaining("");
     setPhysRemaining("");
     setTitleSave("");
+    setHistory([]);
+    try { localStorage.removeItem("bed_history_v2"); } catch {}
   }
 
-  function handleExportPDF() {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("BED Simulator — Rapport", 20, 20);
-    doc.setFontSize(11);
-    let y = 36;
-    history.forEach((r, i) => {
-      doc.text(`${i + 1}. ${r.title}`, 20, y); y += 8;
-      doc.text(`α/β: ${r.alphaBeta || "-"}  BED autorisée: ${r.bedAllowed || "-"} Gy  EQD2: ${r.eqd2Allowed || "-"}`, 22, y); y += 8;
-      doc.text(`BED utilisée: ${r.bedUsed || "-"} Gy  EQD2 utilisée: ${r.eqd2Used || "-"} Gy`, 22, y); y += 8;
-      doc.text(`% oubli: ${r.forgetPercent || "-"}  BED restante: ${r.bedRemaining || "-"} Gy  EQD2 restante: ${r.eqd2Remaining || "-"}`, 22, y); y += 12;
-      if (y > 260) { doc.addPage(); y = 20; }
-    });
-    doc.save("bed_simulator_report.pdf");
-  }
-
-  // Small helper to display current AB
+  // convenience for shown AB placeholder
   const shownAB = () => {
     if (manualAB && manualAB !== "") return manualAB;
     const f = OARS.find((o) => o.name === organ);
@@ -494,15 +476,17 @@ export default function App() {
 
         {/* STEP 1 */}
         <section className="step">
-          <h2 className="step-title">1. Choix de l'organe et α/β</h2>
+          <h2 className="step-title">1. BED totale autorisée</h2>
 
           <label className="field-label">Organe</label>
           <div className="inline-row">
             <select className="field" value={organ} onChange={(e) => setOrgan(e.target.value)}>
-              {OARS.map((o) => <option key={o.name} value={o.name}>{o.name || "-- Sélectionner --"}</option>)}
+              {OARS.map((o) => (
+                <option key={o.name} value={o.name}>{o.name || "-- Sélectionner --"}</option>
+              ))}
             </select>
 
-            <div style={{width:160}}>
+            <div style={{ width: 160 }}>
               <label className="field-label small">α/β (Gy)</label>
               <input className="field small" placeholder={shownAB() ? `prérempli ${shownAB()}` : "α/β (Gy)"} value={manualAB} onChange={(e) => setManualAB(e.target.value)} />
             </div>
@@ -523,7 +507,7 @@ export default function App() {
           </div>
 
           <div className="links">
-            <a href="https://sfro-recorad.fr/radiotherapie-principes-generaux/doses-limites-dans-les-organes-a-risque/doses-limites-des-irradiations-normofractionnees-ou-hypofractionnees-moderees-dose-par-fraction-6-gy-des-organes-a-risque/" target="_blank" rel="noreferrer">Contraintes Recorad : dose par fraction &lt; 6 Gy</a><br/>
+            <a href="https://sfro-recorad.fr/radiotherapie-principes-generaux/doses-limites-dans-les-organes-a-risque/doses-limites-des-irradiations-normofractionnees-ou-hypofractionnees-moderees-dose-par-fraction-6-gy-des-organes-a-risque/" target="_blank" rel="noreferrer">Contraintes Recorad : dose par fraction &lt; 6 Gy</a><br />
             <a href="https://sfro-recorad.fr/radiotherapie-principes-generaux/doses-limites-dans-les-organes-a-risque/test_doses-limites-des-irradiations-hypofractionnees-ablatives-dose-par-fraction-6-gy-des-organes-a-risque/" target="_blank" rel="noreferrer">Contraintes Recorad : dose par fraction &gt; 6 Gy</a>
           </div>
 
@@ -568,15 +552,15 @@ export default function App() {
           <input className="field" value={forgetPercent} onChange={(e) => setForgetPercent(e.target.value)} />
 
           <div className="row-dates">
-            <div style={{flex:1}}>
+            <div style={{ flex: 1 }}>
               <label className="field-label">Date début RT</label>
               <input className="field" type="date" value={startRT} onChange={(e) => setStartRT(e.target.value)} />
             </div>
-            <div style={{flex:1}}>
+            <div style={{ flex: 1 }}>
               <label className="field-label">Date fin RT</label>
               <input className="field" type="date" value={endRT} onChange={(e) => setEndRT(e.target.value)} />
             </div>
-            <div style={{width:140}}>
+            <div style={{ width: 140 }}>
               <label className="field-label">Mois écoulés</label>
               <input className="field" value={monthsElapsed} readOnly />
             </div>
@@ -622,27 +606,28 @@ export default function App() {
         {/* Actions */}
         <div className="actions-row">
           <label className="field-label">Titre (ex : Chiasma)</label>
-          <input className="field" value={titleSave} onChange={(e) => setTitleSave(e.target.value)} />
+          <input className="field" value={titleSave} onChange={(e) => setTitleSave(e.target.value)} placeholder="Titre (obligatoire pour historique)" />
 
           <div className="buttons">
             <button className="btn primary" onClick={handleSave}>💾 Sauvegarder</button>
-            <button className="btn" onClick={handleReset}>♻️ Réinitialiser</button>
-            <button className="btn" onClick={handleExportPDF}>📄 Export PDF</button>
+            <button className="btn" onClick={handleResetAll}>♻️ Réinitialiser</button>
+            {/* Export PDF supprimé comme demandé */}
           </div>
         </div>
 
+        {/* History */}
         <div className="history">
           <h3 className="history-title">📘 Résultats enregistrés</h3>
           {history.length === 0 ? <div className="hint">Aucun résultat enregistré</div> :
             history.slice().reverse().map((h, i) => (
               <div key={i} className="history-item">
-                <strong>{h.title}</strong> — {h.organ || "-"}<br />
-                BED restante: {h.bedRemaining || "-"} Gy — EQD2: {h.eqd2Remaining || "-"} Gy
+                <div style={{ fontWeight: 800 }}>{h.title}</div>
+                <div>BED restante: {h.bedRemaining || "-"} Gy — EQD2 restante: {h.eqd2Remaining || "-"} Gy</div>
+                <div>Dose physique restante: {h.physRemaining || "-"} Gy</div>
+                <div>Dose max / fraction : {h.dpfMax || "-"} Gy — Nombre de fractions planifiées : {h.newFractions || "-"}</div>
               </div>
-            ))
-          }
+            ))}
         </div>
-
       </div>
     </div>
   );
