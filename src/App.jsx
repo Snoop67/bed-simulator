@@ -1,14 +1,9 @@
 import React, { useEffect, useState } from "react";
 import "./index.css";
 
-/*
-  App.jsx final demandé :
-  - OAR list (prérempli α/β)
-  - α/β manuel sur la même ligne
-  - Correction du bug dpf (1.9 affiché 19)
-  - Modèles de récupération mis à jour (Paradis, Nieder, Abusaris, Noël)
-  - Historique qui sauvegarde uniquement le titre entré et affiche BED/EQD2/dose physique restantes, dose max par fraction et nombre de fractions
-  - Suppression du bouton Export PDF
+/* 
+  Version corrigée : auto-calcul STEP2 exécuté uniquement au onBlur (évite le 1.9 -> 19 pendant la frappe)
+  Toutes les autres fonctionnalités précédentes sont conservées.
 */
 
 const OARS = [
@@ -79,7 +74,6 @@ Puis 5% par an jusqu'à 10 ans
   },
 };
 
-// helper safe parse
 function parseNum(v) {
   if (v === "" || v === null || v === undefined) return NaN;
   const s = String(v).trim().replace(",", ".");
@@ -90,8 +84,8 @@ function parseNum(v) {
 export default function App() {
   // STEP 1 (authorized)
   const [organ, setOrgan] = useState("");
-  const [manualAB, setManualAB] = useState(""); // user typed ab (string)
-  const [alphaBeta, setAlphaBeta] = useState(""); // numeric-string used globally
+  const [manualAB, setManualAB] = useState("");
+  const [alphaBeta, setAlphaBeta] = useState("");
   const [doseTotalAuth, setDoseTotalAuth] = useState("");
   const [nAuth, setNAuth] = useState("");
   const [dpfAuth, setDpfAuth] = useState("");
@@ -118,7 +112,7 @@ export default function App() {
   // Options
   const [blockBelow18, setBlockBelow18] = useState(false);
 
-  // Results state
+  // Results
   const [bedAllowed, setBedAllowed] = useState("");
   const [eqd2Allowed, setEqd2Allowed] = useState("");
   const [physAllowed, setPhysAllowed] = useState("");
@@ -157,13 +151,12 @@ export default function App() {
     }
   }, [organ, manualAB]);
 
-  // BUTTON: calculate missing field in STEP1 (dose/n/dpf)
+  // STEP1: calculate missing field button
   function calculateMissingStep1() {
     const TD = parseNum(doseTotalAuth);
     const N = parseNum(nAuth);
     const DPF = parseNum(dpfAuth);
 
-    // fill the empty one
     if (!isNaN(TD) && !isNaN(N) && (dpfAuth === "" || dpfAuth == null)) {
       const calc = TD / N;
       setDpfAuth(calc.toFixed(2));
@@ -181,7 +174,7 @@ export default function App() {
     }
   }
 
-  // Auto-calc dpfAuth when total and n provided (keeps editable)
+  // Auto-calc dpfAuth when total & n provided (keeps editable)
   useEffect(() => {
     const TD = parseNum(doseTotalAuth);
     const N = parseNum(nAuth);
@@ -198,7 +191,6 @@ export default function App() {
     const n = parseNum(nAuth);
     const tot = parseNum(doseTotalAuth);
 
-    // if dpf missing but tot & n present -> compute
     if (isNaN(dpf) && !isNaN(tot) && !isNaN(n) && n !== 0) {
       dpf = tot / n;
     }
@@ -233,18 +225,29 @@ export default function App() {
     }
   }, [doseTotalAuth, nAuth, dpfAuth, alphaBeta, manualBEDAuth, blockBelow18]);
 
-  // STEP2: auto-calc dpfUsed if total+n provided and dpfUsed empty (FIX bug: ensure numeric division)
-  useEffect(() => {
+  // ---------- STEP2: removed auto-effect that fired while typing ----------
+  // We now compute STEP2 missing fields only onBlur of the relevant inputs.
+  function calculateMissingStep2() {
+    // logic similar to step1 calculateMissing but for used fields
     const TD = parseNum(doseTotalUsed);
     const N = parseNum(nUsed);
-    if (!isNaN(TD) && !isNaN(N) && N !== 0 && (dpfUsed === "" || dpfUsed == null)) {
-      const calc = TD / N;
-      // fixed: produce 1.90 not 19 — ensure division uses full numbers and formatted
-      setDpfUsed(calc.toFixed(2));
-    }
-  }, [doseTotalUsed, nUsed]);
+    const DPF = parseNum(dpfUsed);
 
-  // STEP2: compute bedUsed/eqd2Used/physUsed
+    if (!isNaN(TD) && !isNaN(N) && (dpfUsed === "" || dpfUsed == null)) {
+      setDpfUsed((TD / N).toFixed(2));
+      return;
+    }
+    if (!isNaN(TD) && !isNaN(DPF) && (nUsed === "" || nUsed == null)) {
+      setNUsed(String(Math.round(TD / DPF)));
+      return;
+    }
+    if (!isNaN(N) && !isNaN(DPF) && (doseTotalUsed === "" || doseTotalUsed == null)) {
+      setDoseTotalUsed((N * DPF).toFixed(2));
+      return;
+    }
+  }
+
+  // STEP2: compute bedUsed/eqd2Used/physUsed - same as before
   useEffect(() => {
     const ab = parseNum(alphaBeta);
     let dpf = parseNum(dpfUsed);
@@ -285,7 +288,7 @@ export default function App() {
     }
   }, [doseTotalUsed, nUsed, dpfUsed, alphaBeta, manualBEDUsed, blockBelow18]);
 
-  // STEP3: dates -> monthsElapsed
+  // STEP3: date -> monthsElapsed
   useEffect(() => {
     if (!startRT || !endRT) {
       setMonthsElapsed("");
@@ -329,8 +332,6 @@ export default function App() {
     } else if (selectedModel === "noel") {
       if (m < 12) p = 0;
       else {
-        // "Puis 5% par an jusqu'à 10 ans" => approximated linear by years
-        // months to years:
         const years = Math.floor(m / 12);
         const percent = Math.min(50, Math.max(0, 5 * years));
         p = percent;
@@ -364,7 +365,7 @@ export default function App() {
     } else setPhysRemaining("");
   }, [bedAllowed, manualBEDAuth, bedUsed, physAllowed, physUsed, forgetPercent, alphaBeta]);
 
-  // STEP4: compute dpfMax solving quadratic (n/ab) d^2 + n d - B = 0
+  // STEP4: compute dpfMax solving quadratic
   useEffect(() => {
     const B = parseNum(manualBEDRemaining) || parseNum(bedRemaining);
     const n = parseNum(newFractions);
@@ -400,7 +401,7 @@ export default function App() {
     } catch {}
   }, [history]);
 
-  // Save result to history (title must be what user typed - no default "Chiasma")
+  // Save result to history (title must be what user typed)
   function handleSave() {
     const title = (titleSave && titleSave.trim()) || organ || "Sans titre";
     const record = {
@@ -462,7 +463,6 @@ export default function App() {
     try { localStorage.removeItem("bed_history_v2"); } catch {}
   }
 
-  // convenience for shown AB placeholder
   const shownAB = () => {
     if (manualAB && manualAB !== "") return manualAB;
     const f = OARS.find((o) => o.name === organ);
@@ -526,10 +526,18 @@ export default function App() {
           <h2 className="step-title">2. BED utilisée</h2>
 
           <label className="field-label">Dose totale reçue (Gy)</label>
-          <input className="field" value={doseTotalUsed} onChange={(e) => setDoseTotalUsed(e.target.value)} />
+          <input
+            className="field"
+            value={doseTotalUsed}
+            onChange={(e) => setDoseTotalUsed(e.target.value)}
+            onBlur={calculateMissingStep2} />
 
           <label className="field-label">Nombre de fractions</label>
-          <input className="field" value={nUsed} onChange={(e) => setNUsed(e.target.value)} />
+          <input
+            className="field"
+            value={nUsed}
+            onChange={(e) => setNUsed(e.target.value)}
+            onBlur={calculateMissingStep2} />
 
           <label className="field-label">Dose par fraction (Gy)</label>
           <input className="field" value={dpfUsed} onChange={(e) => setDpfUsed(e.target.value)} />
@@ -611,7 +619,6 @@ export default function App() {
           <div className="buttons">
             <button className="btn primary" onClick={handleSave}>💾 Sauvegarder</button>
             <button className="btn" onClick={handleResetAll}>♻️ Réinitialiser</button>
-            {/* Export PDF supprimé comme demandé */}
           </div>
         </div>
 
