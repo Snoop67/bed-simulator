@@ -1,9 +1,16 @@
 import React, { useEffect, useState } from "react";
 import "./index.css";
 
-/* 
-  Version corrigée : auto-calcul STEP2 exécuté uniquement au onBlur (évite le 1.9 -> 19 pendant la frappe)
-  Toutes les autres fonctionnalités précédentes sont conservées.
+/*
+  BED Simulator - App.jsx
+  - Liste complète d'OAR avec α/β préremplis
+  - α/β manuel sur la même ligne
+  - STEP1: dose totale / n / dpf (bouton "Calculer le champ manquant")
+  - STEP2: calcul dpf uniquement au onBlur (corrige le bug 1.9 -> 19)
+  - STEP3: modèles de récupération (Paradis, Nieder, Abusaris, Noël)
+  - STEP4: résolution quadratique pour dpf max
+  - Historique (titre saisi uniquement)
+  - Nouvelle section "Conversion Vx%" (plusieurs lignes possibles)
 */
 
 const OARS = [
@@ -13,7 +20,7 @@ const OARS = [
   { name: "Nerf optique", ab: 2 },
   { name: "Chiasma optique", ab: 2 },
   { name: "Rétine", ab: 2 },
-  { name: "Cristallin", ab: 1.5 },
+  { name: "Cristallin", ab: 1.25 }, // approx 1–1.5 -> 1.25
   { name: "Cervelet", ab: 2 },
   { name: "Cerveau (parenchyme)", ab: 2 },
   { name: "Hippocampe", ab: 2 },
@@ -26,7 +33,7 @@ const OARS = [
   { name: "Poumon (tissu normal)", ab: 3 },
   { name: "Cœur", ab: 3 },
   { name: "Péricarde", ab: 3 },
-  { name: "Foie", ab: 2.75 },
+  { name: "Foie", ab: 2.75 }, // 2.5–3 -> 2.75
   { name: "Reins", ab: 1.5 },
   { name: "Vessie", ab: 3 },
   { name: "Rectum", ab: 3 },
@@ -34,7 +41,7 @@ const OARS = [
   { name: "Côlon", ab: 3 },
   { name: "Peau (réactions tardives)", ab: 3 },
   { name: "Peau (réactions aiguës)", ab: 10 },
-  { name: "Os cortical", ab: 1.75 },
+  { name: "Os cortical", ab: 1.75 }, // ≈1.5–2 -> 1.75
   { name: "Tête fémorale", ab: 2 },
   { name: "Testicules", ab: 2 },
   { name: "Ovaires", ab: 3 },
@@ -82,22 +89,22 @@ function parseNum(v) {
 }
 
 export default function App() {
-  // STEP 1 (authorized)
+  // STEP1: authorized
   const [organ, setOrgan] = useState("");
-  const [manualAB, setManualAB] = useState("");
-  const [alphaBeta, setAlphaBeta] = useState("");
+  const [manualAB, setManualAB] = useState(""); // input text for alpha/beta
+  const [alphaBeta, setAlphaBeta] = useState(""); // used value (string)
   const [doseTotalAuth, setDoseTotalAuth] = useState("");
   const [nAuth, setNAuth] = useState("");
   const [dpfAuth, setDpfAuth] = useState("");
   const [manualBEDAuth, setManualBEDAuth] = useState("");
 
-  // STEP 2 (used)
+  // STEP2: used
   const [doseTotalUsed, setDoseTotalUsed] = useState("");
   const [nUsed, setNUsed] = useState("");
   const [dpfUsed, setDpfUsed] = useState("");
   const [manualBEDUsed, setManualBEDUsed] = useState("");
 
-  // STEP 3 (forget)
+  // STEP3: forget
   const [forgetPercent, setForgetPercent] = useState("");
   const [startRT, setStartRT] = useState("");
   const [endRT, setEndRT] = useState("");
@@ -106,13 +113,10 @@ export default function App() {
   const [tooltipKey, setTooltipKey] = useState(null);
   const [manualBEDRemaining, setManualBEDRemaining] = useState("");
 
-  // STEP 4
+  // STEP4 / options / results / history
   const [newFractions, setNewFractions] = useState("");
-
-  // Options
   const [blockBelow18, setBlockBelow18] = useState(false);
 
-  // Results
   const [bedAllowed, setBedAllowed] = useState("");
   const [eqd2Allowed, setEqd2Allowed] = useState("");
   const [physAllowed, setPhysAllowed] = useState("");
@@ -128,18 +132,22 @@ export default function App() {
   const [dpfMax, setDpfMax] = useState("");
   const [totalMaxPossible, setTotalMaxPossible] = useState("");
 
-  // history (persisted)
   const [titleSave, setTitleSave] = useState("");
   const [history, setHistory] = useState(() => {
     try {
-      const raw = localStorage.getItem("bed_history_v2");
+      const raw = localStorage.getItem("bed_history_v3");
       return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
     }
   });
 
-  // Prefill α/β when organ selected unless user typed manualAB
+  // Vx conversion rows
+  const [vxRows, setVxRows] = useState([
+    { id: Date.now(), seuil: "", fracInit: "", nNew: "", dNew: "" },
+  ]);
+
+  // keep alphaBeta in sync: prefer manualAB if set, otherwise prefill from OARS
   useEffect(() => {
     const found = OARS.find((o) => o.name === organ);
     if (manualAB && manualAB !== "") {
@@ -147,44 +155,41 @@ export default function App() {
     } else if (found && found.ab !== "") {
       setAlphaBeta(String(found.ab));
     } else {
-      if (!manualAB && !found) setAlphaBeta("");
+      setAlphaBeta("");
     }
   }, [organ, manualAB]);
 
-  // STEP1: calculate missing field button
+  // STEP1: calculate missing (button)
   function calculateMissingStep1() {
     const TD = parseNum(doseTotalAuth);
     const N = parseNum(nAuth);
     const DPF = parseNum(dpfAuth);
 
     if (!isNaN(TD) && !isNaN(N) && (dpfAuth === "" || dpfAuth == null)) {
-      const calc = TD / N;
-      setDpfAuth(calc.toFixed(2));
+      setDpfAuth((TD / N).toFixed(2));
       return;
     }
     if (!isNaN(TD) && !isNaN(DPF) && (nAuth === "" || nAuth == null)) {
-      const calc = TD / DPF;
-      setNAuth(String(Math.round(calc)));
+      setNAuth(String(Math.round(TD / DPF)));
       return;
     }
     if (!isNaN(N) && !isNaN(DPF) && (doseTotalAuth === "" || doseTotalAuth == null)) {
-      const calc = N * DPF;
-      setDoseTotalAuth(calc.toFixed(2));
+      setDoseTotalAuth((N * DPF).toFixed(2));
       return;
     }
   }
 
-  // Auto-calc dpfAuth when total & n provided (keeps editable)
+  // auto-calc of dpfAuth when total & n provided but keep editable
   useEffect(() => {
     const TD = parseNum(doseTotalAuth);
     const N = parseNum(nAuth);
     if (!isNaN(TD) && !isNaN(N) && (dpfAuth === "" || dpfAuth == null)) {
-      const calc = TD / N;
-      setDpfAuth(calc.toFixed(2));
+      setDpfAuth((TD / N).toFixed(2));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doseTotalAuth, nAuth]);
 
-  // Compute BED/EQD2/phys for STEP1
+  // STEP1 compute BED/EQD2/physAllowed
   useEffect(() => {
     const ab = parseNum(alphaBeta);
     let dpf = parseNum(dpfAuth);
@@ -225,10 +230,8 @@ export default function App() {
     }
   }, [doseTotalAuth, nAuth, dpfAuth, alphaBeta, manualBEDAuth, blockBelow18]);
 
-  // ---------- STEP2: removed auto-effect that fired while typing ----------
-  // We now compute STEP2 missing fields only onBlur of the relevant inputs.
+  // ---------- STEP2 fix: calculate missing fields only onBlur ----------
   function calculateMissingStep2() {
-    // logic similar to step1 calculateMissing but for used fields
     const TD = parseNum(doseTotalUsed);
     const N = parseNum(nUsed);
     const DPF = parseNum(dpfUsed);
@@ -247,7 +250,7 @@ export default function App() {
     }
   }
 
-  // STEP2: compute bedUsed/eqd2Used/physUsed - same as before
+  // STEP2 compute bedUsed/eqd2Used/physUsed
   useEffect(() => {
     const ab = parseNum(alphaBeta);
     let dpf = parseNum(dpfUsed);
@@ -288,7 +291,7 @@ export default function App() {
     }
   }, [doseTotalUsed, nUsed, dpfUsed, alphaBeta, manualBEDUsed, blockBelow18]);
 
-  // STEP3: date -> monthsElapsed
+  // dates -> monthsElapsed
   useEffect(() => {
     if (!startRT || !endRT) {
       setMonthsElapsed("");
@@ -304,7 +307,7 @@ export default function App() {
     setMonthsElapsed(String(months));
   }, [startRT, endRT]);
 
-  // STEP3: recovery models -> set forgetPercent (auto)
+  // recovery model -> set forgetPercent automatically
   useEffect(() => {
     if (!selectedModel || monthsElapsed === "") return;
     const m = parseNum(monthsElapsed);
@@ -340,7 +343,7 @@ export default function App() {
     if (!isNaN(p)) setForgetPercent(String(p));
   }, [selectedModel, monthsElapsed]);
 
-  // Compute remaining BED/EQD2/phys (STEP3)
+  // compute remaining BED/EQD2/phys (STEP3)
   useEffect(() => {
     const ba = parseNum(manualBEDAuth) || parseNum(bedAllowed);
     const bu = parseNum(bedUsed);
@@ -351,6 +354,7 @@ export default function App() {
       setPhysRemaining("");
       return;
     }
+    // remaining = BA - BU * (1 - forg/100)
     const remaining = ba - bu * (1 - (isNaN(forg) ? 0 : forg / 100));
     const rem = remaining < 0 ? 0 : remaining;
     setBedRemaining(rem.toFixed(2));
@@ -365,12 +369,12 @@ export default function App() {
     } else setPhysRemaining("");
   }, [bedAllowed, manualBEDAuth, bedUsed, physAllowed, physUsed, forgetPercent, alphaBeta]);
 
-  // STEP4: compute dpfMax solving quadratic
+  // STEP4: solve quadratic for dpfMax
   useEffect(() => {
     const B = parseNum(manualBEDRemaining) || parseNum(bedRemaining);
     const n = parseNum(newFractions);
     const ab = parseNum(alphaBeta);
-    if (isNaN(B) || isNaN(n) || n === 0 || isNaN(ab) || ab === 0) {
+    if (isNaN(B) || isNaN(n) || n <= 0 || isNaN(ab) || ab === 0) {
       setDpfMax("");
       setTotalMaxPossible("");
       return;
@@ -397,14 +401,14 @@ export default function App() {
   // persist history
   useEffect(() => {
     try {
-      localStorage.setItem("bed_history_v2", JSON.stringify(history));
+      localStorage.setItem("bed_history_v3", JSON.stringify(history));
     } catch {}
   }, [history]);
 
-  // Save result to history (title must be what user typed)
+  // Save to history
   function handleSave() {
     const title = (titleSave && titleSave.trim()) || organ || "Sans titre";
-    const record = {
+    const rec = {
       title,
       organ,
       alphaBeta,
@@ -423,11 +427,12 @@ export default function App() {
       newFractions,
       createdAt: new Date().toISOString(),
     };
-    setHistory((h) => [...h, record]);
+    setHistory((h) => [...h, rec]);
     setTitleSave("");
   }
 
   function handleResetAll() {
+    // keep history in localStorage? user wanted reset all earlier -> we clear everything except history
     setOrgan("");
     setManualAB("");
     setAlphaBeta("");
@@ -459,10 +464,38 @@ export default function App() {
     setEqd2Remaining("");
     setPhysRemaining("");
     setTitleSave("");
-    setHistory([]);
-    try { localStorage.removeItem("bed_history_v2"); } catch {}
   }
 
+  // Vx helpers
+  function addVxRow() {
+    setVxRows((r) => [...r, { id: Date.now() + Math.random(), seuil: "", fracInit: "", nNew: "", dNew: "" }]);
+  }
+  function removeVxRow(id) {
+    setVxRows((r) => r.filter((row) => row.id !== id));
+  }
+  function updateVxRow(id, field, value) {
+    setVxRows((rows) => rows.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
+  }
+  function computeVxForRow(row) {
+    const ab = parseNum(alphaBeta);
+    const seuil = parseNum(row.seuil);
+    const fracInit = parseNum(row.fracInit);
+    const dNew = parseNum(row.dNew);
+    const nNew = parseNum(row.nNew);
+    if (isNaN(ab) || isNaN(seuil) || isNaN(fracInit) || isNaN(dNew)) return null;
+    // BED_ref = D_seuil * (1 + d1 / ab)   (since D_seuil = n1*d1)
+    const bedRef = seuil * (1 + fracInit / ab);
+    // New total dose equivalent in new fractionation with dose per fraction dNew:
+    const Dnew_total = bedRef / (1 + dNew / ab);
+    // If nNew provided, compute required d_per_fraction (Dnew_total / nNew)
+    const d_per_frac_needed = !isNaN(nNew) && nNew > 0 ? Dnew_total / nNew : null;
+    return {
+      Dnew_total: Number.isFinite(Dnew_total) ? Dnew_total : null,
+      d_per_frac_needed: d_per_frac_needed && Number.isFinite(d_per_frac_needed) ? d_per_frac_needed : null,
+    };
+  }
+
+  // small helper for shown AB placeholder
   const shownAB = () => {
     if (manualAB && manualAB !== "") return manualAB;
     const f = OARS.find((o) => o.name === organ);
@@ -481,9 +514,7 @@ export default function App() {
           <label className="field-label">Organe</label>
           <div className="inline-row">
             <select className="field" value={organ} onChange={(e) => setOrgan(e.target.value)}>
-              {OARS.map((o) => (
-                <option key={o.name} value={o.name}>{o.name || "-- Sélectionner --"}</option>
-              ))}
+              {OARS.map((o) => <option key={o.name} value={o.name}>{o.name || "-- Sélectionner --"}</option>)}
             </select>
 
             <div style={{ width: 160 }}>
@@ -503,7 +534,10 @@ export default function App() {
 
           <div className="controls-row">
             <button className="btn primary" onClick={calculateMissingStep1}>⚙️ Calculer le champ manquant</button>
-            <label className="inline-checkbox"><input type="checkbox" checked={blockBelow18} onChange={(e) => setBlockBelow18(e.target.checked)} /> Bloquer doses &lt; 1.8 Gy</label>
+            <label className="inline-checkbox">
+              <input type="checkbox" checked={blockBelow18} onChange={(e) => setBlockBelow18(e.target.checked)} />
+              Bloquer doses &lt; 1.8 Gy
+            </label>
           </div>
 
           <div className="links">
@@ -530,14 +564,16 @@ export default function App() {
             className="field"
             value={doseTotalUsed}
             onChange={(e) => setDoseTotalUsed(e.target.value)}
-            onBlur={calculateMissingStep2} />
+            onBlur={calculateMissingStep2}
+          />
 
           <label className="field-label">Nombre de fractions</label>
           <input
             className="field"
             value={nUsed}
             onChange={(e) => setNUsed(e.target.value)}
-            onBlur={calculateMissingStep2} />
+            onBlur={calculateMissingStep2}
+          />
 
           <label className="field-label">Dose par fraction (Gy)</label>
           <input className="field" value={dpfUsed} onChange={(e) => setDpfUsed(e.target.value)} />
@@ -554,7 +590,7 @@ export default function App() {
 
         {/* STEP 3 */}
         <section className="step">
-          <h2 className="step-title">3. Calcul de la dose restante</h2>
+          <h2 className="step-title">3. BED restante autorisée</h2>
 
           <label className="field-label">% de dose d'oubli (manuel)</label>
           <input className="field" value={forgetPercent} onChange={(e) => setForgetPercent(e.target.value)} />
@@ -600,7 +636,7 @@ export default function App() {
 
         {/* STEP 4 */}
         <section className="step">
-          <h2 className="step-title">4. Dose par fraction possible</h2>
+          <h2 className="step-title">4. Dose maximale par fraction autorisée</h2>
 
           <label className="field-label">Nombre de fractions prévues</label>
           <input className="field" value={newFractions} onChange={(e) => setNewFractions(e.target.value)} />
@@ -614,7 +650,7 @@ export default function App() {
         {/* Actions */}
         <div className="actions-row">
           <label className="field-label">Titre (ex : Chiasma)</label>
-          <input className="field" value={titleSave} onChange={(e) => setTitleSave(e.target.value)} placeholder="Titre (obligatoire pour historique)" />
+          <input className="field" value={titleSave} onChange={(e) => setTitleSave(e.target.value)} placeholder="Titre (sera affiché tel quel)" />
 
           <div className="buttons">
             <button className="btn primary" onClick={handleSave}>💾 Sauvegarder</button>
@@ -631,10 +667,42 @@ export default function App() {
                 <div style={{ fontWeight: 800 }}>{h.title}</div>
                 <div>BED restante: {h.bedRemaining || "-"} Gy — EQD2 restante: {h.eqd2Remaining || "-"} Gy</div>
                 <div>Dose physique restante: {h.physRemaining || "-"} Gy</div>
-                <div>Dose max / fraction : {h.dpfMax || "-"} Gy — Nombre de fractions planifiées : {h.newFractions || "-"}</div>
+                <div>Dose max / fraction : {h.dpfMax || "-"} Gy — Nb fractions planifiées : {h.newFractions || "-"}</div>
               </div>
             ))}
         </div>
+
+        {/* Conversion Vx% module */}
+        <section className="step">
+          <h2 className="step-title">Conversion Vx% — équivalent physique</h2>
+          <div className="hint small">α/β utilisé : <strong>{alphaBeta || "-"}</strong> (repris depuis l'étape 1)</div>
+
+          {vxRows.map((row) => {
+            const res = computeVxForRow(row);
+            return (
+              <div key={row.id} className="vx-row">
+                <input className="field vx" type="number" placeholder="Dose seuil initiale (Gy)" value={row.seuil} onChange={(e) => updateVxRow(row.id, "seuil", e.target.value)} />
+                <input className="field vx" type="number" placeholder="Fractionnement initial (d₁ Gy)" value={row.fracInit} onChange={(e) => updateVxRow(row.id, "fracInit", e.target.value)} />
+                <input className="field vx" type="number" placeholder="Nouveau n (optionnel)" value={row.nNew} onChange={(e) => updateVxRow(row.id, "nNew", e.target.value)} />
+                <input className="field vx" type="number" placeholder="Nouveau d (d₂ Gy)" value={row.dNew} onChange={(e) => updateVxRow(row.id, "dNew", e.target.value)} />
+                <div className="vx-result">
+                  {res && res.Dnew_total ? (
+                    <>
+                      <div><strong>Équiv. totale :</strong> {res.Dnew_total.toFixed(2)} Gy</div>
+                      {res.d_per_frac_needed && <div><strong>Si n={row.nNew} → d/f nécessaire :</strong> {res.d_per_frac_needed.toFixed(2)} Gy</div>}
+                    </>
+                  ) : <div className="muted">Remplir seuil, d₁ et d₂</div>}
+                </div>
+                <button className="vx-remove" onClick={() => removeVxRow(row.id)}>✕</button>
+              </div>
+            );
+          })}
+
+          <div style={{ marginTop: 10 }}>
+            <button className="btn" onClick={addVxRow}>+ Ajouter contrainte (Vx)</button>
+          </div>
+        </section>
+
       </div>
     </div>
   );
