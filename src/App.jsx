@@ -1,206 +1,180 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import jsPDF from "jspdf";
 import "./App.css";
 
-const OARS = [
-  { name: "", ab: "" },
-  { name: "Moelle épinière", ab: 2 },
-  { name: "Tronc cérébral", ab: 2 },
-  { name: "Nerf optique", ab: 2 },
-  { name: "Chiasma optique", ab: 2 },
-  { name: "Rétine", ab: 2 },
-  { name: "Cristallin", ab: 1.5 },
-  { name: "Cervelet", ab: 2 },
-  { name: "Cerveau (parenchyme)", ab: 2 },
-  { name: "Hippocampe", ab: 2 },
-  { name: "Glande parotide", ab: 3 },
-  { name: "Glande sous-maxillaire", ab: 3 },
-  { name: "Muqueuse orale", ab: 10 },
-  { name: "Larynx (cartilage)", ab: 3 },
-  { name: "Larynx (muqueuse)", ab: 10 },
-  { name: "Œsophage (tardif)", ab: 3 },
-  { name: "Poumon (tissu normal)", ab: 3 },
-  { name: "Cœur", ab: 3 },
-  { name: "Péricarde", ab: 3 },
-  { name: "Foie", ab: 2.75 },
-  { name: "Reins", ab: 1.5 },
-  { name: "Vessie", ab: 3 },
-  { name: "Rectum", ab: 3 },
-  { name: "Intestin grêle", ab: 3 },
-  { name: "Côlon", ab: 3 },
-  { name: "Peau (réactions tardives)", ab: 3 },
-  { name: "Peau (réactions aiguës)", ab: 10 },
-  { name: "Os cortical", ab: 1.75 },
-  { name: "Tête fémorale", ab: 2 },
-  { name: "Testicules", ab: 2 },
-  { name: "Ovaires", ab: 3 },
-];
-
-function num(v) {
-  if (v === "" || v == null) return NaN;
-  const s = String(v).trim().replace(",", ".");
-  if (s === "") return NaN;
-  return Number(s);
-}
-
 export default function App() {
+  const [organe, setOrgane] = useState("");
   const [alphaBeta, setAlphaBeta] = useState("");
-  const [manualAlphaBeta, setManualAlphaBeta] = useState("");
-  const [n, setN] = useState("");
-  const [d, setD] = useState("");
-  const [bed, setBed] = useState("");
-  const [eqd2, setEqd2] = useState("");
-  const [bedUsed, setBedUsed] = useState("");
-  const [forgetPercent, setForgetPercent] = useState("");
-  const [bedAllowed, setBedAllowed] = useState("");
-  const [manualBEDAuth, setManualBEDAuth] = useState("");
-  const [dpf, setDpf] = useState("");
-  const [history, setHistory] = useState([]);
+  const [doseTotale, setDoseTotale] = useState("");
+  const [nbFractions, setNbFractions] = useState("");
+  const [doseParFraction, setDoseParFraction] = useState("");
+  const [bedAutorisee, setBedAutorisee] = useState("");
+  const [eqd2Autorisee, setEqd2Autorisee] = useState("");
+  const [dosePhysiqueAutorisee, setDosePhysiqueAutorisee] = useState("");
 
-  useEffect(() => {
-    if (n && d && (manualAlphaBeta || alphaBeta)) {
-      const abVal = num(manualAlphaBeta) || num(alphaBeta);
-      const bedVal = n * d * (1 + d / abVal);
-      setBed(bedVal.toFixed(2));
-      const eqd2Val = bedVal / (1 + 2 / abVal);
-      setEqd2(eqd2Val.toFixed(2));
-    } else {
-      setBed("");
-      setEqd2("");
+  const [doseRecue, setDoseRecue] = useState("");
+  const [fractionsRecues, setFractionsRecues] = useState("");
+  const [doseParFractionRecue, setDoseParFractionRecue] = useState("");
+  const [bedUtilisee, setBedUtilisee] = useState("");
+  const [eqd2Utilisee, setEqd2Utilisee] = useState("");
+
+  const [bedRestante, setBedRestante] = useState("");
+  const [eqd2Restante, setEqd2Restante] = useState("");
+
+  const [nouveauNbFractions, setNouveauNbFractions] = useState("");
+  const [doseMaxFraction, setDoseMaxFraction] = useState("");
+  const [doseTotaleMax, setDoseTotaleMax] = useState("");
+
+  const [historique, setHistorique] = useState([]);
+
+  // Calcul automatique dose par fraction
+  const calculerDoseFraction = () => {
+    if (doseTotale && nbFractions) {
+      setDoseParFraction((parseFloat(doseTotale) / parseFloat(nbFractions)).toFixed(2));
     }
-  }, [n, d, alphaBeta, manualAlphaBeta]);
-
-  useEffect(() => {
-    if (bedUsed && forgetPercent) {
-      const remaining = num(bedUsed) * (1 - num(forgetPercent) / 100);
-      setBedAllowed(remaining.toFixed(2));
-    }
-  }, [bedUsed, forgetPercent]);
-
-  useEffect(() => {
-    if (n && (num(manualBEDAuth) || num(bedAllowed)) && (manualAlphaBeta || alphaBeta)) {
-      const abVal = num(manualAlphaBeta) || num(alphaBeta);
-      const bedAuth = num(manualBEDAuth) || num(bedAllowed);
-      const dpfVal = (-abVal + Math.sqrt(abVal ** 2 + 4 * bedAuth / n * abVal)) / 2;
-      setDpf(dpfVal.toFixed(2));
-    } else {
-      setDpf("");
-    }
-  }, [n, manualBEDAuth, bedAllowed, alphaBeta, manualAlphaBeta]);
-
-  const reset = () => {
-    setAlphaBeta("");
-    setManualAlphaBeta("");
-    setN("");
-    setD("");
-    setBed("");
-    setEqd2("");
-    setBedUsed("");
-    setForgetPercent("");
-    setBedAllowed("");
-    setManualBEDAuth("");
-    setDpf("");
   };
 
-  const saveHistory = () => {
-    if (!n || !d || !bed) return;
-    const abVal = num(manualAlphaBeta) || num(alphaBeta);
-    const entry = {
-      organ: OARS.find((o) => o.ab === alphaBeta)?.name || "",
-      ab: abVal,
-      n,
-      d,
-      bed,
-      eqd2
+  const calculerBedEtEqd2Autorisee = () => {
+    if (doseParFraction && nbFractions && alphaBeta) {
+      const bed = parseFloat(nbFractions) * parseFloat(doseParFraction) * (1 + parseFloat(doseParFraction) / parseFloat(alphaBeta));
+      setBedAutorisee(bed.toFixed(2));
+      setEqd2Autorisee((bed / (1 + 2 / parseFloat(alphaBeta))).toFixed(2));
+      setDosePhysiqueAutorisee(parseFloat(doseTotale).toFixed(2));
+    }
+  };
+
+  const calculerBedEtEqd2Utilisee = () => {
+    if (doseRecue && fractionsRecues && alphaBeta) {
+      const dpf = parseFloat(doseRecue) / parseFloat(fractionsRecues);
+      setDoseParFractionRecue(dpf.toFixed(2));
+      const bedU = parseFloat(fractionsRecues) * dpf * (1 + dpf / parseFloat(alphaBeta));
+      setBedUtilisee(bedU.toFixed(2));
+      setEqd2Utilisee((bedU / (1 + 2 / parseFloat(alphaBeta))).toFixed(2));
+    }
+  };
+
+  const calculerBedEtEqd2Restante = () => {
+    if (bedAutorisee && bedUtilisee) {
+      const bedR = parseFloat(bedAutorisee) - parseFloat(bedUtilisee);
+      setBedRestante(bedR.toFixed(2));
+      setEqd2Restante((bedR / (1 + 2 / parseFloat(alphaBeta))).toFixed(2));
+    }
+  };
+
+  const calculerDoseMaxParFraction = () => {
+    if (bedRestante && nouveauNbFractions && alphaBeta) {
+      const B = parseFloat(bedRestante);
+      const n = parseFloat(nouveauNbFractions);
+      const ab = parseFloat(alphaBeta);
+      const d = (-ab + Math.sqrt(ab * ab + (4 * B * ab) / n)) / 2;
+      setDoseMaxFraction(d.toFixed(2));
+      setDoseTotaleMax((d * n).toFixed(2));
+    }
+  };
+
+  const sauvegarderHistorique = () => {
+    const entree = {
+      organe,
+      bedRestante,
+      eqd2Restante,
+      doseMaxFraction,
+      doseTotaleMax
     };
-    setHistory([entry, ...history.slice(0, 9)]);
+    setHistorique([...historique, entree]);
   };
 
-  const exportPDF = () => {
+  const genererPDF = () => {
     const doc = new jsPDF();
-    doc.text("BED Simulator - Résultats", 10, 10);
-    history.forEach((h, idx) => {
-      doc.text(
-        `${idx + 1}. ${h.organ} | α/β=${h.ab} | n=${h.n} | d=${h.d} Gy | BED=${h.bed} | EQD2=${h.eqd2}`,
-        10,
-        20 + idx * 10
-      );
+    doc.setFontSize(16);
+    doc.text("Rapport BED", 20, 20);
+    historique.forEach((item, index) => {
+      doc.text(`${index + 1}. ${item.organe}`, 20, 30 + index * 30);
+      doc.text(`BED restante: ${item.bedRestante} Gy`, 30, 38 + index * 30);
+      doc.text(`EQD2 restante: ${item.eqd2Restante} Gy`, 30, 46 + index * 30);
+      doc.text(`Dose max/fraction: ${item.doseMaxFraction} Gy`, 30, 54 + index * 30);
+      doc.text(`Dose totale max: ${item.doseTotaleMax} Gy`, 30, 62 + index * 30);
     });
-    doc.save("bed-simulator.pdf");
+    doc.save("rapport-bed.pdf");
   };
 
   return (
-    <div className="App">
-      <h1>BED Simulator</h1>
-      <div>
+    <div className="container">
+      <h1>Calculateur BED</h1>
+
+      {/* ÉTAPE 1 */}
+      <h2>1. BED totale autorisée</h2>
+      <div className="inline-fields">
         <label>Organe :</label>
-        <select value={alphaBeta} onChange={(e) => setAlphaBeta(e.target.value)}>
-          {OARS.map((o) => (
-            <option key={o.name} value={o.ab}>
-              {o.name}
-            </option>
-          ))}
-        </select>
+        <input value={organe} onChange={(e) => setOrgane(e.target.value)} />
+        <label>Alpha/Beta (Gy) :</label>
+        <input value={alphaBeta} onChange={(e) => setAlphaBeta(e.target.value)} />
       </div>
-      <div>
-        <label>α/β manuel :</label>
-        <input
-          type="number"
-          value={manualAlphaBeta}
-          onChange={(e) => setManualAlphaBeta(e.target.value)}
-        />
+
+      <label>Dose totale (Gy) :</label>
+      <input value={doseTotale} onChange={(e) => setDoseTotale(e.target.value)} />
+
+      <label>Nombre de fractions :</label>
+      <input value={nbFractions} onChange={(e) => setNbFractions(e.target.value)} />
+
+      <label>Dose par fraction (Gy) :</label>
+      <input value={doseParFraction} onChange={(e) => setDoseParFraction(e.target.value)} />
+      <button onClick={calculerDoseFraction}>Calculer dose/fraction</button>
+
+      <button onClick={calculerBedEtEqd2Autorisee}>Calculer BED & EQD2</button>
+      <div className="result-box">
+        <p>BED autorisée : {bedAutorisee} Gy</p>
+        <p>EQD2 autorisée : {eqd2Autorisee} Gy</p>
+        <p>Dose physique autorisée : {dosePhysiqueAutorisee} Gy</p>
       </div>
-      <div>
-        <label>Nombre fractions (n) :</label>
-        <input type="number" value={n} onChange={(e) => setN(e.target.value)} />
+
+      {/* ÉTAPE 2 */}
+      <h2>2. BED utilisée</h2>
+      <label>Dose totale reçue (Gy) :</label>
+      <input value={doseRecue} onChange={(e) => setDoseRecue(e.target.value)} />
+
+      <label>Nombre de fractions reçues :</label>
+      <input value={fractionsRecues} onChange={(e) => setFractionsRecues(e.target.value)} />
+
+      <button onClick={calculerBedEtEqd2Utilisee}>Calculer BED utilisée</button>
+      <div className="result-box">
+        <p>Dose par fraction reçue : {doseParFractionRecue} Gy</p>
+        <p>BED utilisée : {bedUtilisee} Gy</p>
+        <p>EQD2 utilisée : {eqd2Utilisee} Gy</p>
       </div>
-      <div>
-        <label>Dose / fraction (d en Gy) :</label>
-        <input type="number" value={d} onChange={(e) => setD(e.target.value)} />
+
+      {/* ÉTAPE 3 */}
+      <h2>3. BED restante autorisée</h2>
+      <button onClick={calculerBedEtEqd2Restante}>Calculer BED restante</button>
+      <div className="result-box">
+        <p>BED restante : {bedRestante} Gy</p>
+        <p>EQD2 restante : {eqd2Restante} Gy</p>
       </div>
-      <div>
-        <p>BED = {bed}</p>
-        <p>EQD2 = {eqd2}</p>
+
+      {/* ÉTAPE 4 */}
+      <h2>4. Dose maximale par fraction autorisée</h2>
+      <label>Nombre de fractions prévues :</label>
+      <input value={nouveauNbFractions} onChange={(e) => setNouveauNbFractions(e.target.value)} />
+
+      <button onClick={calculerDoseMaxParFraction}>Calculer dose max/fraction</button>
+      <div className="result-box">
+        <p>Dose max par fraction : {doseMaxFraction} Gy</p>
+        <p>Dose totale max possible : {doseTotaleMax} Gy</p>
       </div>
-      <div>
-        <label>BED utilisée :</label>
-        <input type="number" value={bedUsed} onChange={(e) => setBedUsed(e.target.value)} />
-      </div>
-      <div>
-        <label>% oubli :</label>
-        <input
-          type="number"
-          value={forgetPercent}
-          onChange={(e) => setForgetPercent(e.target.value)}
-        />
-      </div>
-      <div>
-        <p>BED restante = {bedAllowed}</p>
-      </div>
-      <div>
-        <label>BED autorisée manuelle :</label>
-        <input
-          type="number"
-          value={manualBEDAuth}
-          onChange={(e) => setManualBEDAuth(e.target.value)}
-        />
-      </div>
-      <div>
-        <p>Dose/fraction possible = {dpf}</p>
-      </div>
-      <div>
-        <button onClick={saveHistory}>Sauvegarder</button>
-        <button onClick={reset}>Réinitialiser</button>
-        <button onClick={exportPDF}>Exporter PDF</button>
-      </div>
-      <h2>Historique</h2>
-      <ul>
-        {history.map((h, idx) => (
-          <li key={idx}>
-            {h.organ} | α/β={h.ab} | n={h.n} | d={h.d} Gy | BED={h.bed} | EQD2={h.eqd2}
-          </li>
-        ))}
-      </ul>
+
+      <button onClick={sauvegarderHistorique}>💾 Sauvegarder résultat</button>
+      <button onClick={genererPDF}>📄 Générer PDF</button>
+
+      {/* Historique */}
+      <h2>📘 Résultats enregistrés</h2>
+      {historique.map((item, index) => (
+        <div key={index} className="history-card">
+          <strong>{item.organe}</strong>
+          <p>BED restante : {item.bedRestante} Gy</p>
+          <p>EQD2 restante : {item.eqd2Restante} Gy</p>
+          <p>Dose max/fraction : {item.doseMaxFraction} Gy</p>
+          <p>Dose totale max : {item.doseTotaleMax} Gy</p>
+        </div>
+      ))}
     </div>
   );
 }
