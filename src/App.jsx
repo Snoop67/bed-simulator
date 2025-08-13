@@ -588,7 +588,7 @@ export default function App() {
                 checked={blockBelow18}
                 onChange={(e) => setBlockBelow18(e.target.checked)}
               />
-              Bloquer les dpf &lt; 1.8 Gy
+              Bloquer les dose/fraction &lt; 1.8 Gy
             </label>
           </div>
 
