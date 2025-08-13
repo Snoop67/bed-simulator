@@ -1,635 +1,799 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "./index.css";
 
-/** ===========
- *  Données OAR (α/β)
- *  =========== */
-const OAR_LIST = [
-  { name: "Moelle épinière", alphaBeta: 2 },
-  { name: "Tronc cérébral", alphaBeta: 2 },
-  { name: "Nerf optique", alphaBeta: 2 },
-  { name: "Chiasma optique", alphaBeta: 2 },
-  { name: "Rétine", alphaBeta: 2 },
-  { name: "Cristallin", alphaBeta: 1.5 },
-  { name: "Cervelet", alphaBeta: 2 },
-  { name: "Cerveau (parenchyme)", alphaBeta: 2 },
-  { name: "Hippocampe", alphaBeta: 2 },
-  { name: "Glande parotide", alphaBeta: 3 },
-  { name: "Glande sous-maxillaire", alphaBeta: 3 },
-  { name: "Muqueuse orale", alphaBeta: 10 },
-  { name: "Larynx (cartilage)", alphaBeta: 3 },
-  { name: "Larynx (muqueuse)", alphaBeta: 10 },
-  { name: "Œsophage (tardif)", alphaBeta: 3 },
-  { name: "Poumon (tissu normal)", alphaBeta: 3 },
-  { name: "Cœur", alphaBeta: 3 },
-  { name: "Péricarde", alphaBeta: 3 },
-  { name: "Foie", alphaBeta: 3 },
-  { name: "Reins", alphaBeta: 1.5 },
-  { name: "Vessie", alphaBeta: 3 },
-  { name: "Rectum", alphaBeta: 3 },
-  { name: "Intestin grêle", alphaBeta: 3 },
-  { name: "Côlon", alphaBeta: 3 },
-  { name: "Peau (réactions tardives)", alphaBeta: 3 },
-  { name: "Peau (réactions aiguës)", alphaBeta: 10 },
-  { name: "Os cortical", alphaBeta: 2 },
-  { name: "Tête fémorale", alphaBeta: 2 },
-  { name: "Testicules", alphaBeta: 2 },
-  { name: "Ovaires", alphaBeta: 3 },
+/**
+ * BED Simulator — App.jsx (version complète)
+ * - Présentation identique à “hier” : titres bleus, labels au-dessus, mise en page aérée.
+ * - Étape 1 : Organe + α/β manuel (sur la même ligne), dose totale / n / dpf + bouton "Calculer le champ manquant".
+ * - Étape 2 : Calcul dpf uniquement au onBlur (corrige 1.9 => 19), plus saisie manuelle de BED utilisée.
+ * - Étape 3 : Modèles de récupération (Paradis, Nieder, Abusaris, Noël) avec info-bulles (i), dates → mois → % d’oubli auto.
+ * - Étape 4 : Résolution quadratique pour dpf max (en gardant le même α/β que l’étape 1), nb de fractions prévu.
+ * - Options : case "Bloquer doses < 1.8 Gy" (affecte dpf autorisées & utilisées).
+ * - Historique : le titre affiché est exactement celui saisi, sans ajout (ex. “Chiasma” seulement si tu l’écris).
+ * - Conversion VxGy < x% — équivalent (labels au-dessus de chaque champ, α/β repris de l’étape 1 mais modifiable).
+ * - Aucun placeholder d’exemples dans les inputs (comme demandé).
+ */
+
+/* --- OARs avec α/β par défaut (issus de ta liste) --- */
+const OARS = [
+  { name: "", ab: "" },
+  { name: "Moelle épinière", ab: 2 },
+  { name: "Tronc cérébral", ab: 2 },
+  { name: "Nerf optique", ab: 2 },
+  { name: "Chiasma optique", ab: 2 },
+  { name: "Rétine", ab: 2 },
+  { name: "Cristallin", ab: 1.25 }, // ≈ 1–1.5
+  { name: "Cervelet", ab: 2 },
+  { name: "Cerveau (parenchyme)", ab: 2 },
+  { name: "Hippocampe", ab: 2 },
+  { name: "Glande parotide", ab: 3 },
+  { name: "Glande sous-maxillaire", ab: 3 },
+  { name: "Muqueuse orale", ab: 10 },
+  { name: "Larynx (cartilage)", ab: 3 },
+  { name: "Larynx (muqueuse)", ab: 10 },
+  { name: "Œsophage (tardif)", ab: 3 },
+  { name: "Poumon (tissu normal)", ab: 3 },
+  { name: "Cœur", ab: 3 },
+  { name: "Péricarde", ab: 3 },
+  { name: "Foie", ab: 2.75 }, // 2.5–3
+  { name: "Reins", ab: 1.5 },
+  { name: "Vessie", ab: 3 },
+  { name: "Rectum", ab: 3 },
+  { name: "Intestin grêle", ab: 3 },
+  { name: "Côlon", ab: 3 },
+  { name: "Peau (réactions tardives)", ab: 3 },
+  { name: "Peau (réactions aiguës)", ab: 10 },
+  { name: "Os cortical", ab: 1.75 }, // ≈ 1.5–2
+  { name: "Tête fémorale", ab: 2 },
+  { name: "Testicules", ab: 2 },
+  { name: "Ovaires", ab: 3 },
 ];
 
-/** ===========
- *  Helpers
- *  =========== */
-const p = (v) => {
-  if (v === null || v === undefined) return NaN;
-  if (typeof v === "number") return v;
-  const s = String(v).replace(",", ".").trim();
-  const num = Number(s);
-  return Number.isFinite(num) ? num : NaN;
+/* --- Modèles de récupération (texte des info-bulles) --- */
+const RECOVERY_MODELS = {
+  paradis: {
+    title: "Paradis et al. : récupération rapide",
+    tooltip: `0–3 mois  : 0 %
+4–6 mois  : 10 %
+7–12 mois : 25 %
+≥ 12 mois : 50 %`,
+  },
+  nieder: {
+    title: "Nieder et al. : récupération rapide",
+    tooltip: `0–3 mois : 0 %
+4 mois : 17 %
+5 mois : 25 %
+6 mois : 28 %
+7 mois : 33 %
+8 mois : 37 %
+9 mois : 40 %
+10 mois : 45 %
+≥ 11 mois : 50%`,
+  },
+  abusaris: {
+    title: "Abusaris et al. : récupération rapide",
+    tooltip: `<6 mois : 0%
+6–12 mois : 25%
+>12 mois : 50%`,
+  },
+  noel: {
+    title: "Noël et al. : récupération lente",
+    tooltip: `0 % avant 1 an
+Puis 5% par an jusqu'à 10 ans
+≥ 10 ans : 50%`,
+  },
 };
-const fmt = (v, digits = 2) =>
-  Number.isFinite(v) ? Number(v).toFixed(digits) : "";
 
-const bed = (n, d, ab) => n * d * (1 + d / ab);
-const eqd2FromBED = (B, ab) => B / (1 + 2 / ab);
+/* --- Utils --- */
+const toNum = (v) => {
+  if (v === "" || v === null || v === undefined) return NaN;
+  const s = String(v).replace(",", ".").trim();
+  if (!s) return NaN;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+};
 
-/** ===========
- *  Modèles d’oubli
- *  =========== */
-function percentOubliParMois(mode, months) {
-  const m = p(months);
-  if (!Number.isFinite(m) || m < 0) return 0;
-  switch (mode) {
-    case "Paradis":
-      // 0–3 : 0% ; 4–6 : 10% ; 7–12 : 25% ; ≥12 : 50%
-      if (m <= 3) return 0;
-      if (m <= 6) return 10;
-      if (m <= 12) return 25;
-      return 50;
-    case "Nieder":
-      // 0–3 : 0% ; 4 : 17 ; 5 : 25 ; 6 : 28 ; 7 : 33 ; 8 : 37 ; 9 : 40 ; 10 : 45 ; ≥11 : 50
-      if (m <= 3) return 0;
-      if (m < 5) return 17;
-      if (m < 6) return 25;
-      if (m < 7) return 28;
-      if (m < 8) return 33;
-      if (m < 9) return 37;
-      if (m < 10) return 40;
-      if (m < 11) return 45;
-      return 50;
-    case "Abusaris":
-      // <6 : 0 ; 6–12 : 25 ; >12 : 50
-      if (m < 6) return 0;
-      if (m <= 12) return 25;
-      return 50;
-    case "Noël":
-      // 0% avant 12 mois ; +5%/an ensuite ; plateau 50% à 10 ans
-      if (m < 12) return 0;
-      const yearsAfter1y = Math.floor((m - 12) / 12) + 1; // à 12m → 1 an => 5%
-      return Math.min(5 * yearsAfter1y, 50);
-    default:
-      return 0;
-  }
-}
+const fmt = (v, d = 2) => (v === "" || isNaN(v) ? "" : Number(v).toFixed(d));
 
-/** ===========
- *  Composant principal
- *  =========== */
+/* --- Formules --- */
+const bedFrom = (n, d, ab) => n * d * (1 + d / ab);
+const eqd2From = (bed, ab) => bed / (1 + 2 / ab);
+
 export default function App() {
-  /* ---- Préférences / options globales ---- */
-  const [lockMin18, setLockMin18] = useState(false); // Bloquer d/f < 1.8 Gy (autorisé & utilisé)
-  const enforceDpf = (d) => {
-    const x = p(d);
-    if (!Number.isFinite(x)) return NaN;
-    return lockMin18 ? Math.max(x, 1.8) : x;
-  };
+  /* ========== ÉTATS ========== */
 
-  /* ---- Étape 1 : Autorisé ---- */
-  const [oar, setOar] = useState("");
-  const [abManual, setAbManual] = useState(""); // α/β manuel
-  const abSelected = useMemo(() => {
-    if (abManual !== "" && Number.isFinite(p(abManual))) return p(abManual);
-    const found = OAR_LIST.find((x) => x.name === oar);
-    return found ? found.alphaBeta : NaN;
-  }, [oar, abManual]);
-
-  const [totalA, setTotalA] = useState("");
-  const [fractionsA, setFractionsA] = useState("");
-  const [dpfA, setDpfA] = useState("");
-  const [bedA_manual, setBedA_manual] = useState(""); // saisie manuelle alternative
-
-  // Recalcul “champ manquant” (exactement comme avant) — sur clic
-  const calcMissingA = () => {
-    const td = p(totalA);
-    const n = p(fractionsA);
-    const d = p(dpfA);
-    if (Number.isFinite(td) && Number.isFinite(n) && !Number.isFinite(d)) {
-      setDpfA(fmt(td / n));
-    } else if (Number.isFinite(td) && Number.isFinite(d) && !Number.isFinite(n)) {
-      setFractionsA(String(Math.round(td / d)));
-    }
-  };
-
-  // Valeurs autorisées (BED/EQD2/dose physique)
-  const B_A = useMemo(() => {
-    if (bedA_manual !== "" && Number.isFinite(p(bedA_manual))) {
-      return p(bedA_manual);
-    }
-    const n = p(fractionsA);
-    let d = p(dpfA);
-    const ab = abSelected;
-    if (!Number.isFinite(ab) || ab <= 0) return NaN;
-    if (Number.isFinite(p(totalA)) && !Number.isFinite(d) && Number.isFinite(n)) {
-      // si total et n présents mais pas d : on peut déduire d = total/n pour calcul physique
-      d = p(totalA) / n;
-    }
-    if (!Number.isFinite(n) || !Number.isFinite(d)) return NaN;
-    const dEff = enforceDpf(d);
-    return bed(n, dEff, ab);
-  }, [bedA_manual, fractionsA, dpfA, totalA, abSelected, lockMin18]);
-
-  const EQD2_A = useMemo(() => {
-    if (!Number.isFinite(B_A) || !Number.isFinite(abSelected) || abSelected <= 0)
-      return NaN;
-    return eqd2FromBED(B_A, abSelected);
-  }, [B_A, abSelected]);
-
-  const dosePhys_A = useMemo(() => {
-    // Dose physique autorisée = dpf * n si on a les deux, sinon total si saisi
-    const n = p(fractionsA);
-    const d = Number.isFinite(p(dpfA)) ? enforceDpf(dpfA) : NaN;
-    if (Number.isFinite(n) && Number.isFinite(d)) {
-      return n * d;
-    }
-    const td = p(totalA);
-    return Number.isFinite(td) ? td : NaN;
-  }, [fractionsA, dpfA, totalA, lockMin18]);
-
-  /* ---- Étape 2 : Utilisée (1ère irradiation) ---- */
-  const [totalU, setTotalU] = useState("");
-  const [fractionsU, setFractionsU] = useState("");
-  const [dpfU, setDpfU] = useState("");
-
-  // AUTO : dpfU = totalU / fractionsU (bug corrigé : recalcule à chaque changement)
-  useEffect(() => {
-    const td = p(totalU);
-    const n = p(fractionsU);
-    if (Number.isFinite(td) && Number.isFinite(n) && n > 0) {
-      setDpfU(fmt(td / n));
-    } else {
-      setDpfU(""); // si incomplet, on efface
-    }
-  }, [totalU, fractionsU]);
-
-  const B_U = useMemo(() => {
-    const n = p(fractionsU);
-    const d = enforceDpf(dpfU);
-    const ab = abSelected;
-    if (!Number.isFinite(ab) || ab <= 0) return NaN;
-    if (!Number.isFinite(n) || !Number.isFinite(d)) return NaN;
-    return bed(n, d, ab);
-  }, [fractionsU, dpfU, abSelected, lockMin18]);
-
-  const EQD2_U = useMemo(() => {
-    if (!Number.isFinite(B_U) || !Number.isFinite(abSelected) || abSelected <= 0)
-      return NaN;
-    return eqd2FromBED(B_U, abSelected);
-  }, [B_U, abSelected]);
-
-  const dosePhys_U = useMemo(() => {
-    const n = p(fractionsU);
-    const d = enforceDpf(dpfU);
-    if (Number.isFinite(n) && Number.isFinite(d)) return n * d;
-    const td = p(totalU);
-    return Number.isFinite(td) ? td : NaN;
-  }, [fractionsU, dpfU, totalU, lockMin18]);
-
-  /* ---- Étape 3 : Oubli + BED restante ---- */
-  const [mois, setMois] = useState("");
-  const [modeOubli, setModeOubli] = useState("Paradis");
-  const [pourcentManuel, setPourcentManuel] = useState("");
-  const pourcentAuto = useMemo(
-    () => percentOubliParMois(modeOubli, mois),
-    [modeOubli, mois]
+  // Étape 1 — Autorisée
+  const [organ, setOrgan] = useState("");
+  const [abManual, setAbManual] = useState(""); // saisie manuelle à côté de l'organe
+  const abDefault = useMemo(
+    () => (OARS.find((o) => o.name === organ)?.ab ?? ""),
+    [organ]
   );
-  const forgetPct = useMemo(() => {
-    const m = p(pourcentManuel);
-    if (Number.isFinite(m)) return Math.min(Math.max(m, 0), 50);
-    return pourcentAuto;
-  }, [pourcentManuel, pourcentAuto]);
+  const alphaBeta = abManual !== "" ? abManual : abDefault;
 
-  const [bedR_manual, setBedR_manual] = useState(""); // “OU BED restante (saisie manuelle)”
+  const [tdAuth, setTdAuth] = useState(""); // dose totale
+  const [nAuth, setNAuth] = useState(""); // nombre de fractions
+  const [dAuth, setDAuth] = useState(""); // dose par fraction
+  const [bedAuthManual, setBedAuthManual] = useState(""); // saisie directe de BED autorisée
+  const [blockBelow18, setBlockBelow18] = useState(false); // bloquer dpf < 1.8 Gy
 
-  const B_R = useMemo(() => {
-    if (bedR_manual !== "" && Number.isFinite(p(bedR_manual))) {
-      return p(bedR_manual);
+  // Étape 2 — Utilisée (corrigée : calcul du champ manquant au onBlur)
+  const [tdUsed, setTdUsed] = useState("");
+  const [nUsed, setNUsed] = useState("");
+  const [dUsed, setDUsed] = useState("");
+  const [bedUsedManual, setBedUsedManual] = useState("");
+
+  // Étape 3 — Oubli / Récupération
+  const [forgetPercent, setForgetPercent] = useState(""); // % override manuel
+  const [dStart, setDStart] = useState("");
+  const [dEnd, setDEnd] = useState("");
+  const [months, setMonths] = useState("");
+  const [recoveryModel, setRecoveryModel] = useState(""); // paradis | nieder | abusaris | noel
+  const [openTip, setOpenTip] = useState(null); // info-bulle
+
+  const [bedRemainManual, setBedRemainManual] = useState("");
+
+  // Étape 4 — dpf max autorisée
+  const [nPlan, setNPlan] = useState("");
+  const [dpfMax, setDpfMax] = useState("");
+  const [totMax, setTotMax] = useState("");
+
+  // Historique
+  const [titleSave, setTitleSave] = useState("");
+  const [history, setHistory] = useState(() => {
+    try {
+      const raw = localStorage.getItem("bed_history_full");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
     }
-    if (!Number.isFinite(B_A) || !Number.isFinite(B_U)) return NaN;
-    // BED restante = BED_autorisée - BED_utilisée*(1 - oubli)
-    const B = B_A - B_U * (1 - forgetPct / 100);
-    return B >= 0 ? B : 0;
-  }, [bedR_manual, B_A, B_U, forgetPct]);
+  });
 
-  const EQD2_R = useMemo(() => {
-    if (!Number.isFinite(B_R) || !Number.isFinite(abSelected) || abSelected <= 0)
-      return NaN;
-    return eqd2FromBED(B_R, abSelected);
-  }, [B_R, abSelected]);
+  // Conversion Vx
+  const [vxRows, setVxRows] = useState([
+    { id: Date.now(), seuil: "", dInit: "", nNew: "", dNew: "", ab: "" }, // ab vide = utilise alphaBeta de l’étape 1
+  ]);
 
-  // Dose physique “restante” n’est pas définie sans n/d cibles ; on l’affichera en Étape 4
+  /* ========== CALCULS ÉTAPE 1 ========== */
 
-  /* ---- Étape 4 : Dose max par fraction possible pour n prévu ---- */
-  const [nPrev, setNPrev] = useState("");
-  const dpfMax = useMemo(() => {
-    // d solution de : B_R = n * d * (1 + d/ab)  →  (n/ab) d^2 + n d - B_R = 0
-    const B = B_R;
-    const n = p(nPrev);
-    const ab = abSelected;
-    if (!Number.isFinite(B) || !Number.isFinite(n) || !Number.isFinite(ab)) return NaN;
-    if (B <= 0 || n <= 0 || ab <= 0) return NaN;
+  // Bouton "Calculer le champ manquant"
+  const calcMissingStep1 = () => {
+    const TD = toNum(tdAuth);
+    const N = toNum(nAuth);
+    const D = toNum(dAuth);
+
+    if (!isNaN(TD) && !isNaN(N) && (dAuth === "" || dAuth == null)) {
+      setDAuth((TD / N).toFixed(2));
+      return;
+    }
+    if (!isNaN(TD) && !isNaN(D) && (nAuth === "" || nAuth == null)) {
+      setNAuth(String(Math.round(TD / D)));
+      return;
+    }
+    if (!isNaN(N) && !isNaN(D) && (tdAuth === "" || tdAuth == null)) {
+      setTdAuth((N * D).toFixed(2));
+      return;
+    }
+  };
+
+  // Calculs autorisés (BED / EQD2 / Dose physique) — utilisent ab + blocage dpf < 1.8
+  const [bedAllowed, eqd2Allowed, physAllowed] = useMemo(() => {
+    const ab = toNum(alphaBeta);
+    if (isNaN(ab) || ab === 0) return ["", "", ""];
+
+    let d = toNum(dAuth);
+    const n = toNum(nAuth);
+    const TD = toNum(tdAuth);
+
+    // Déduire d si possible
+    if (isNaN(d) && !isNaN(TD) && !isNaN(n) && n !== 0) d = TD / n;
+    if (blockBelow18 && !isNaN(d) && d < 1.8) d = 1.8;
+
+    // BED manuelle prioritaire
+    const bedManual = toNum(bedAuthManual);
+    if (!isNaN(bedManual)) {
+      const eq = bedManual / (1 + 2 / ab);
+      // dose physique autorisée (on affiche la physique liée aux champs fournis)
+      const phys =
+        !isNaN(n) && !isNaN(d) ? n * d : !isNaN(TD) ? TD : "";
+      return [fmt(bedManual), fmt(eq), fmt(phys)];
+    }
+
+    if (!isNaN(d) && !isNaN(n) && n !== 0) {
+      const bed = bedFrom(n, d, ab);
+      const eq = eqd2From(bed, ab);
+      return [fmt(bed), fmt(eq), fmt(n * d)];
+    }
+    if (!isNaN(TD) && !isNaN(d) && d !== 0) {
+      const ncalc = TD / d;
+      const bed = bedFrom(ncalc, d, ab);
+      const eq = eqd2From(bed, ab);
+      return [fmt(bed), fmt(eq), fmt(TD)];
+    }
+    return ["", "", ""];
+  }, [alphaBeta, dAuth, nAuth, tdAuth, bedAuthManual, blockBelow18]);
+
+  /* ========== CALCULS ÉTAPE 2 (onBlur) ========== */
+
+  const calcMissingStep2 = () => {
+    const TD = toNum(tdUsed);
+    const N = toNum(nUsed);
+    const D = toNum(dUsed);
+
+    if (!isNaN(TD) && !isNaN(N) && (dUsed === "" || dUsed == null)) {
+      setDUsed((TD / N).toFixed(2));
+      return;
+    }
+    if (!isNaN(TD) && !isNaN(D) && (nUsed === "" || nUsed == null)) {
+      setNUsed(String(Math.round(TD / D)));
+      return;
+    }
+    if (!isNaN(N) && !isNaN(D) && (tdUsed === "" || tdUsed == null)) {
+      setTdUsed((N * D).toFixed(2));
+      return;
+    }
+  };
+
+  const [bedUsed, eqd2Used, physUsed] = useMemo(() => {
+    const ab = toNum(alphaBeta);
+    if (isNaN(ab) || ab === 0) return ["", "", ""];
+
+    let d = toNum(dUsed);
+    const n = toNum(nUsed);
+    const TD = toNum(tdUsed);
+
+    if (isNaN(d) && !isNaN(TD) && !isNaN(n) && n !== 0) d = TD / n;
+    if (blockBelow18 && !isNaN(d) && d < 1.8) d = 1.8;
+
+    const bedManual = toNum(bedUsedManual);
+    if (!isNaN(bedManual)) {
+      const eq = bedManual / (1 + 2 / ab);
+      const phys =
+        !isNaN(n) && !isNaN(d) ? n * d : !isNaN(TD) ? TD : "";
+      return [fmt(bedManual), fmt(eq), fmt(phys)];
+    }
+
+    if (!isNaN(d) && !isNaN(n) && n !== 0) {
+      const bed = bedFrom(n, d, ab);
+      const eq = eqd2From(bed, ab);
+      return [fmt(bed), fmt(eq), fmt(n * d)];
+    }
+    if (!isNaN(TD) && !isNaN(d) && d !== 0) {
+      const ncalc = TD / d;
+      const bed = bedFrom(ncalc, d, ab);
+      const eq = eqd2From(bed, ab);
+      return [fmt(bed), fmt(eq), fmt(TD)];
+    }
+    return ["", "", ""];
+  }, [alphaBeta, dUsed, nUsed, tdUsed, bedUsedManual, blockBelow18]);
+
+  /* ========== ÉTAPE 3 ========== */
+
+  // Dates → mois
+  useEffect(() => {
+    if (!dStart || !dEnd) {
+      setMonths("");
+      return;
+    }
+    const s = new Date(dStart);
+    const e = new Date(dEnd);
+    if (isNaN(s) || isNaN(e) || e < s) {
+      setMonths("");
+      return;
+    }
+    const m = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+    setMonths(String(m));
+  }, [dStart, dEnd]);
+
+  // Appliquer modèle de récupération → % d’oubli
+  useEffect(() => {
+    if (!recoveryModel) return;
+    const m = toNum(months);
+    if (isNaN(m)) return;
+
+    let p = 0;
+    if (recoveryModel === "paradis") {
+      if (m <= 3) p = 0;
+      else if (m <= 6) p = 10;
+      else if (m <= 12) p = 25;
+      else p = 50;
+    } else if (recoveryModel === "nieder") {
+      if (m <= 3) p = 0;
+      else if (m === 4) p = 17;
+      else if (m === 5) p = 25;
+      else if (m === 6) p = 28;
+      else if (m === 7) p = 33;
+      else if (m === 8) p = 37;
+      else if (m === 9) p = 40;
+      else if (m === 10) p = 45;
+      else p = 50;
+    } else if (recoveryModel === "abusaris") {
+      if (m < 6) p = 0;
+      else if (m <= 12) p = 25;
+      else p = 50;
+    } else if (recoveryModel === "noel") {
+      if (m < 12) p = 0;
+      else {
+        const years = Math.floor(m / 12);
+        p = Math.min(50, Math.max(0, 5 * years));
+      }
+    }
+    setForgetPercent(String(p));
+  }, [recoveryModel, months]);
+
+  // BED/EQD2/Dose restantes
+  const [bedRemain, eqd2Remain, physRemain] = useMemo(() => {
+    const bedAut = toNum(bedAuthManual) || toNum(bedAllowed);
+    const bedUse = toNum(bedUsed);
+    if (isNaN(bedAut) || isNaN(bedUse)) return ["", "", ""];
+
+    const p = toNum(forgetPercent);
+    const forget = isNaN(p) ? 0 : p / 100;
+
+    let remaining = bedAut - bedUse * (1 - forget);
+    if (remaining < 0) remaining = 0;
+
+    const ab = toNum(alphaBeta);
+    const eq = !isNaN(ab) && ab !== 0 ? remaining / (1 + 2 / ab) : "";
+
+    const physAut = toNum(physAllowed);
+    const physUse = toNum(physUsed);
+    let physRem = "";
+    if (!isNaN(physAut) && !isNaN(physUse)) {
+      const val = physAut - physUse * (1 - forget);
+      physRem = fmt(val < 0 ? 0 : val);
+    }
+
+    // Si l’utilisateur saisit manuellement la BED restante, on la remplace dans l’affichage Étape 4.
+    const manual = toNum(bedRemainManual);
+    const bedFinal = !isNaN(manual) ? manual : remaining;
+
+    return [fmt(bedFinal), fmt(eq), physRem];
+  }, [bedAllowed, bedAuthManual, bedUsed, physAllowed, physUsed, forgetPercent, alphaBeta, bedRemainManual]);
+
+  /* ========== ÉTAPE 4 (dpf max) ========== */
+  useEffect(() => {
+    const B = toNum(bedRemain); // déjà inclut la saisie manuelle si présente (voir plus haut)
+    const n = toNum(nPlan);
+    const ab = toNum(alphaBeta);
+    if (isNaN(B) || isNaN(n) || n <= 0 || isNaN(ab) || ab === 0) {
+      setDpfMax("");
+      setTotMax("");
+      return;
+    }
+    // n * d * (1 + d/ab) = B => (n/ab) d^2 + (n) d - B = 0
     const a = n / ab;
     const b = n;
     const c = -B;
     const disc = b * b - 4 * a * c;
-    if (disc < 0) return NaN;
-    const d = (-b + Math.sqrt(disc)) / (2 * a); // racine positive
-    return d;
-  }, [B_R, nPrev, abSelected]);
+    if (disc < 0) {
+      setDpfMax("");
+      setTotMax("");
+      return;
+    }
+    const root = (-b + Math.sqrt(disc)) / (2 * a);
+    if (root <= 0) {
+      setDpfMax("");
+      setTotMax("");
+      return;
+    }
+    setDpfMax(root.toFixed(2));
+    setTotMax((root * n).toFixed(2));
+  }, [bedRemain, nPlan, alphaBeta]);
 
-  const totalMax = useMemo(() => {
-    const n = p(nPrev);
-    return Number.isFinite(dpfMax) && Number.isFinite(n) ? dpfMax * n : NaN;
-  }, [dpfMax, nPrev]);
+  /* ========== Historique ========== */
+  useEffect(() => {
+    try {
+      localStorage.setItem("bed_history_full", JSON.stringify(history));
+    } catch {}
+  }, [history]);
 
-  /* ---- Historique ---- */
-  const [organeTitre, setOrganeTitre] = useState("");
-  const [history, setHistory] = useState([]);
-  const saveEntry = () => {
-    const name = (organeTitre || oar || "Organe").trim();
-    setHistory((prev) => [
-      ...prev,
-      {
-        name,
-        ab: Number.isFinite(abSelected) ? abSelected : null,
-        A: {
-          BED: Number.isFinite(B_A) ? fmt(B_A) : "",
-          EQD2: Number.isFinite(EQD2_A) ? fmt(EQD2_A) : "",
-          phys: Number.isFinite(dosePhys_A) ? fmt(dosePhys_A) : "",
-          n: Number.isFinite(p(fractionsA)) ? String(p(fractionsA)) : "",
-          dpf: Number.isFinite(p(dpfA)) ? fmt(enforceDpf(dpfA)) : "",
-          total: Number.isFinite(p(totalA)) ? fmt(p(totalA)) : "",
-        },
-        U: {
-          BED: Number.isFinite(B_U) ? fmt(B_U) : "",
-          EQD2: Number.isFinite(EQD2_U) ? fmt(EQD2_U) : "",
-          phys: Number.isFinite(dosePhys_U) ? fmt(dosePhys_U) : "",
-          n: Number.isFinite(p(fractionsU)) ? String(p(fractionsU)) : "",
-          dpf: Number.isFinite(p(dpfU)) ? fmt(enforceDpf(dpfU)) : "",
-          total: Number.isFinite(p(totalU)) ? fmt(p(totalU)) : "",
-        },
-        R: {
-          BED: Number.isFinite(B_R) ? fmt(B_R) : "",
-          EQD2: Number.isFinite(EQD2_R) ? fmt(EQD2_R) : "",
-        },
-        plan: {
-          n: Number.isFinite(p(nPrev)) ? String(p(nPrev)) : "",
-          dpfMax: Number.isFinite(dpfMax) ? fmt(dpfMax) : "",
-          totalMax: Number.isFinite(totalMax) ? fmt(totalMax) : "",
-        },
-      },
-    ]);
-    setOrganeTitre("");
+  const saveToHistory = () => {
+    const item = {
+      title: (titleSave && titleSave.trim()) || "Sans titre",
+      organ,
+      alphaBeta,
+      // Étape 1
+      tdAuth, nAuth, dAuth, bedAllowed, eqd2Allowed, physAllowed,
+      // Étape 2
+      tdUsed, nUsed, dUsed, bedUsed, eqd2Used, physUsed,
+      // Étape 3
+      forgetPercent, bedRemain, eqd2Remain, physRemain,
+      // Étape 4
+      nPlan, dpfMax, totMax,
+      createdAt: new Date().toISOString(),
+    };
+    setHistory((h) => [...h, item]);
+    setTitleSave("");
   };
 
-  /* ---- Conversion VxGy (équivalences) ---- */
-  const [vx_ab_manual, setVxAbManual] = useState(""); // alpha/beta spécifique à l’étape Vx (par défaut = abSelected)
-  const vxAB = useMemo(() => {
-    const v = p(vx_ab_manual);
-    if (Number.isFinite(v) && v > 0) return v;
-    return Number.isFinite(abSelected) ? abSelected : NaN;
-  }, [vx_ab_manual, abSelected]);
+  const resetAll = () => {
+    setOrgan("");
+    setAbManual("");
+    setTdAuth(""); setNAuth(""); setDAuth(""); setBedAuthManual(""); setBlockBelow18(false);
+    setTdUsed(""); setNUsed(""); setDUsed(""); setBedUsedManual("");
+    setForgetPercent(""); setDStart(""); setDEnd(""); setMonths(""); setRecoveryModel(""); setOpenTip(null);
+    setBedRemainManual("");
+    setNPlan(""); setDpfMax(""); setTotMax("");
+    setTitleSave("");
+    setVxRows([{ id: Date.now(), seuil: "", dInit: "", nNew: "", dNew: "", ab: "" }]);
+  };
 
-  const [vxDoseSeuilIni, setVxDoseSeuilIni] = useState("");
-  const [vxDpfIni, setVxDpfIni] = useState("");
-  const [vxN, setVxN] = useState("");
-  const [vxDpfNew, setVxDpfNew] = useState("");
+  /* ========== Conversion VxGy — équivalent ========== */
 
-  const vxResult = useMemo(() => {
-    const D0 = p(vxDoseSeuilIni);
-    const d0 = p(vxDpfIni);
-    const n1 = p(vxN);
-    const d1 = p(vxDpfNew);
-    const ab = vxAB;
-    if (!Number.isFinite(D0) || !Number.isFinite(d0) || !Number.isFinite(ab)) return null;
+  const addVxRow = () =>
+    setVxRows((rows) => [...rows, { id: Date.now() + Math.random(), seuil: "", dInit: "", nNew: "", dNew: "", ab: "" }]);
 
-    // BED de référence pour la dose-seuil
-    const BED_ref = D0 * (1 + d0 / ab);
+  const removeVxRow = (id) => setVxRows((rows) => rows.filter((r) => r.id !== id));
 
-    // Nouvelle dose-seuil physique si on impose d1 :
-    // D1 = BED_ref / (1 + d1/ab)
-    const D1_if_d1 = Number.isFinite(d1) ? BED_ref / (1 + d1 / ab) : NaN;
+  const updateVxRow = (id, field, value) =>
+    setVxRows((rows) => rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
 
-    // Si on impose n1, quelle d/f donnerait la même dose-seuil ?:
-    // BED_ref = n1 * d * (1 + d/ab)  -> résout d
-    let dNeeded = NaN;
-    if (Number.isFinite(n1) && n1 > 0) {
-      const a = n1 / ab;
-      const b = n1;
-      const c = -BED_ref;
-      const disc = b * b - 4 * a * c;
-      if (disc >= 0) dNeeded = (-b + Math.sqrt(disc)) / (2 * a);
-    }
+  const computeVx = (row) => {
+    const abUsed = row.ab !== "" ? toNum(row.ab) : toNum(alphaBeta);
+    const seuil = toNum(row.seuil);   // D_seuil (Gy physique)
+    const d1 = toNum(row.dInit);      // d1 (Gy/fraction initial)
+    const nNew = toNum(row.nNew);     // nouveau n (optionnel)
+    const d2 = toNum(row.dNew);       // d2 (Gy/fraction nouveau)
+
+    if (isNaN(abUsed) || isNaN(seuil) || isNaN(d1) || isNaN(d2)) return null;
+
+    // BED_ref = D_seuil * (1 + d1/ab)
+    const BEDref = seuil * (1 + d1 / abUsed);
+    // Dose physique équivalente au nouveau fractionnement si on impose d2 :
+    const Dequiv_total = BEDref / (1 + d2 / abUsed);
+    // Si nNew fourni, d/f nécessaire pour retrouver l’équivalent :
+    const d_per_frac_needed = !isNaN(nNew) && nNew > 0 ? Dequiv_total / nNew : null;
 
     return {
-      equivTotalIfD1: Number.isFinite(D1_if_d1) ? D1_if_d1 : null,
-      dpfNeededIfN1: Number.isFinite(dNeeded) ? dNeeded : null,
+      Dequiv_total: Dequiv_total,
+      d_per_frac_needed,
     };
-  }, [vxDoseSeuilIni, vxDpfIni, vxN, vxDpfNew, vxAB]);
+  };
 
-  /* ---- UI ---- */
+  /* ========== RENDER ========== */
+
+  const shownAB = () => (abManual !== "" ? abManual : abDefault || "");
+
   return (
-    <div className="container">
-      <h1 className="title">BED Simulator ☢️</h1>
+    <div className="app-wrap">
+      <div className="card">
+        <h1 className="main-title centered">BED Simulator ☢️</h1>
 
-      {/* Option globale */}
-      <div className="inline-row">
-        <label className="checkbox">
+        {/* ===== Étape 1 ===== */}
+        <section className="step">
+          <h2 className="step-title">1. BED totale autorisée</h2>
+
+          <div className="inline-row">
+            <div className="col grow">
+              <label className="field-label">Organe</label>
+              <select className="field" value={organ} onChange={(e) => setOrgan(e.target.value)}>
+                {OARS.map((o) => (
+                  <option key={o.name} value={o.name}>
+                    {o.name || "-- Sélectionner --"}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="col fixed">
+              <label className="field-label">α/β (Gy)</label>
+              <input
+                className="field"
+                value={abManual}
+                onChange={(e) => setAbManual(e.target.value)}
+                placeholder={shownAB() ? `prérempli ${shownAB()}` : ""}
+              />
+            </div>
+          </div>
+
+          <label className="field-label">Dose totale (Gy)</label>
+          <input className="field" value={tdAuth} onChange={(e) => setTdAuth(e.target.value)} />
+
+          <label className="field-label">Nombre de fractions</label>
+          <input className="field" value={nAuth} onChange={(e) => setNAuth(e.target.value)} />
+
+          <label className="field-label">Dose par fraction (Gy)</label>
+          <input className="field" value={dAuth} onChange={(e) => setDAuth(e.target.value)} />
+
+          <div className="controls-row">
+            <button className="btn primary" onClick={calcMissingStep1}>
+              ⚙️ Calculer le champ manquant
+            </button>
+            <label className="inline-checkbox">
+              <input
+                type="checkbox"
+                checked={blockBelow18}
+                onChange={(e) => setBlockBelow18(e.target.checked)}
+              />
+              Bloquer les dpf &lt; 1.8 Gy
+            </label>
+          </div>
+
+          <div className="recorad-links">
+            <div><strong>Contraintes Recorad :</strong></div>
+            <a
+              href="https://sfro-recorad.fr/radiotherapie-principes-generaux/doses-limites-dans-les-organes-a-risque/doses-limites-des-irradiations-normofractionnees-ou-hypofractionnees-moderees-dose-par-fraction-6-gy-des-organes-a-risque/"
+              target="_blank" rel="noreferrer"
+            >
+              &nbsp;• Dose par fraction ≤ 6 Gy
+            </a>
+            <a
+              href="https://sfro-recorad.fr/radiotherapie-principes-generaux/doses-limites-dans-les-organes-a-risque/test_doses-limites-des-irradiations-hypofractionnees-ablatives-dose-par-fraction-6-gy-des-organes-a-risque/"
+              target="_blank" rel="noreferrer"
+            >
+              &nbsp;• Dose par fraction &gt; 6 Gy
+            </a>
+          </div>
+
+          <div className="result-box highlight">
+            <div className="result-line">
+              <span className="result-label">BED autorisée :</span> <strong>{bedAllowed || "-"}</strong> Gy
+            </div>
+            <div className="result-line">
+              <span className="result-label">EQD2 autorisée :</span> <strong>{eqd2Allowed || "-"}</strong> Gy
+            </div>
+            <div className="result-line">
+              <span className="result-label">Dose physique autorisée :</span> <strong>{physAllowed || "-"}</strong> Gy
+            </div>
+          </div>
+
+          <label className="field-label">OU BED autorisée (saisie manuelle)</label>
+          <input className="field" value={bedAuthManual} onChange={(e) => setBedAuthManual(e.target.value)} />
+        </section>
+
+        {/* ===== Étape 2 ===== */}
+        <section className="step">
+          <h2 className="step-title">2. BED utilisée</h2>
+
+          <label className="field-label">Dose totale reçue (Gy)</label>
           <input
-            type="checkbox"
-            checked={lockMin18}
-            onChange={(e) => setLockMin18(e.target.checked)}
+            className="field"
+            value={tdUsed}
+            onChange={(e) => setTdUsed(e.target.value)}
+            onBlur={calcMissingStep2}
           />
-          Bloquer les doses par fraction &lt; 1,8 Gy (autorisé & utilisée)
-        </label>
+
+          <label className="field-label">Nombre de fractions</label>
+          <input
+            className="field"
+            value={nUsed}
+            onChange={(e) => setNUsed(e.target.value)}
+            onBlur={calcMissingStep2}
+          />
+
+          <label className="field-label">Dose par fraction (Gy)</label>
+          <input
+            className="field"
+            value={dUsed}
+            onChange={(e) => setDUsed(e.target.value)}
+            onBlur={calcMissingStep2}
+          />
+
+          <div className="result-box">
+            <div className="result-line">
+              <span className="result-label">BED utilisée :</span> <strong>{bedUsed || "-"}</strong> Gy
+            </div>
+            <div className="result-line">
+              <span className="result-label">EQD2 utilisée :</span> <strong>{eqd2Used || "-"}</strong> Gy
+            </div>
+            <div className="result-line">
+              <span className="result-label">Dose physique utilisée :</span> <strong>{physUsed || "-"}</strong> Gy
+            </div>
+          </div>
+
+          <label className="field-label">OU BED utilisée (saisie manuelle)</label>
+          <input className="field" value={bedUsedManual} onChange={(e) => setBedUsedManual(e.target.value)} />
+        </section>
+
+        {/* ===== Étape 3 ===== */}
+        <section className="step">
+          <h2 className="step-title">3. BED restante autorisée</h2>
+
+          <label className="field-label">% de dose d’oubli (manuel)</label>
+          <input className="field" value={forgetPercent} onChange={(e) => setForgetPercent(e.target.value)} />
+
+          <div className="row-dates">
+            <div className="col grow">
+              <label className="field-label">Date début RT</label>
+              <input className="field" type="date" value={dStart} onChange={(e) => setDStart(e.target.value)} />
+            </div>
+            <div className="col grow">
+              <label className="field-label">Date fin RT</label>
+              <input className="field" type="date" value={dEnd} onChange={(e) => setDEnd(e.target.value)} />
+            </div>
+            <div className="col fixed small">
+              <label className="field-label">Mois écoulés</label>
+              <input className="field" value={months} readOnly />
+            </div>
+          </div>
+
+          <label className="field-label">Choisir un modèle (ou laisser % manuel)</label>
+          <div className="model-list">
+            {Object.entries(RECOVERY_MODELS).map(([key, val]) => (
+              <div key={key} className="model-row">
+                <label className="model-label">
+                  <input
+                    type="radio"
+                    name="recov"
+                    checked={recoveryModel === key}
+                    onChange={() => setRecoveryModel(key)}
+                  />
+                  {" "}{val.title}
+                </label>
+                <button
+                  className="info"
+                  onClick={() => setOpenTip(openTip === key ? null : key)}
+                  aria-label="info"
+                  title="Afficher le détail"
+                >
+                  i
+                </button>
+                {openTip === key && <div className="tooltip">{val.tooltip}</div>}
+              </div>
+            ))}
+          </div>
+
+          <div className="result-box highlight">
+            <div className="result-line">
+              <span className="result-label">BED restante :</span> <strong>{bedRemain || "-"}</strong> Gy
+            </div>
+            <div className="result-line">
+              <span className="result-label">EQD2 restante :</span> <strong>{eqd2Remain || "-"}</strong> Gy
+            </div>
+            <div className="result-line">
+              <span className="result-label">Dose physique restante :</span> <strong>{physRemain || "-"}</strong> Gy
+            </div>
+          </div>
+
+          <label className="field-label">OU BED restante (saisie manuelle)</label>
+          <input className="field" value={bedRemainManual} onChange={(e) => setBedRemainManual(e.target.value)} />
+        </section>
+
+        {/* ===== Étape 4 ===== */}
+        <section className="step">
+          <h2 className="step-title">4. Dose maximale par fraction autorisée</h2>
+
+          <label className="field-label">Nombre de fractions prévues</label>
+          <input className="field" value={nPlan} onChange={(e) => setNPlan(e.target.value)} />
+
+          <div className="result-box">
+            <div className="result-line">
+              <span className="result-label">Dose max par fraction :</span> <strong>{dpfMax || "-"}</strong> Gy
+            </div>
+            <div className="result-line">
+              <span className="result-label">Dose totale max possible :</span> <strong>{totMax || "-"}</strong> Gy
+            </div>
+          </div>
+        </section>
+
+        {/* ===== Actions / Historique ===== */}
+        <section className="step">
+          <h2 className="step-title">Sauvegarde</h2>
+          <label className="field-label">Titre (affiché tel quel)</label>
+          <input
+            className="field"
+            value={titleSave}
+            onChange={(e) => setTitleSave(e.target.value)}
+          />
+          <div className="buttons">
+            <button className="btn primary" onClick={saveToHistory}>💾 Enregistrer</button>
+            <button className="btn" onClick={resetAll}>♻️ Réinitialiser</button>
+          </div>
+        </section>
+
+        <div className="history">
+          <h3 className="history-title">📘 Résultats enregistrés</h3>
+          {history.length === 0 ? (
+            <div className="hint">Aucun résultat enregistré</div>
+          ) : (
+            history.slice().reverse().map((h, i) => (
+              <div key={i} className="history-item">
+                <div className="hist-title">{h.title}</div>
+                <div>BED restante : {h.bedRemain || "-"} Gy — EQD2 restante : {h.eqd2Remain || "-" } Gy</div>
+                <div>Dose physique restante : {h.physRemain || "-"} Gy</div>
+                <div>Dose max/fraction : {h.dpfMax || "-"} Gy — Nb de fractions prévues : {h.nPlan || "-"}</div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* ===== Conversion VxGy < x% — équivalent ===== */}
+        <section className="step">
+          <h2 className="step-title centered">Conversion VxGy &lt; x% — équivalent</h2>
+          <div className="hint small">
+            α/β utilisé : <strong>{alphaBeta || "-"}</strong> (repris depuis l’étape 1 — modifiable par ligne)
+          </div>
+
+          {vxRows.map((row) => {
+            const out = computeVx(row);
+            return (
+              <div key={row.id} className="vx-row">
+                <div className="vx-col">
+                  <label className="field-label">Dose seuil initiale (Gy)</label>
+                  <input
+                    className="field"
+                    type="number"
+                    value={row.seuil}
+                    onChange={(e) => updateVxRow(row.id, "seuil", e.target.value)}
+                  />
+                </div>
+                <div className="vx-col">
+                  <label className="field-label">Dose par fraction initiale (Gy)</label>
+                  <input
+                    className="field"
+                    type="number"
+                    value={row.dInit}
+                    onChange={(e) => updateVxRow(row.id, "dInit", e.target.value)}
+                  />
+                </div>
+                <div className="vx-col">
+                  <label className="field-label">Nouveau n (optionnel)</label>
+                  <input
+                    className="field"
+                    type="number"
+                    value={row.nNew}
+                    onChange={(e) => updateVxRow(row.id, "nNew", e.target.value)}
+                  />
+                </div>
+                <div className="vx-col">
+                  <label className="field-label">Nouvelle dose/fraction d₂ (Gy)</label>
+                  <input
+                    className="field"
+                    type="number"
+                    value={row.dNew}
+                    onChange={(e) => updateVxRow(row.id, "dNew", e.target.value)}
+                  />
+                </div>
+                <div className="vx-col ab-override">
+                  <label className="field-label">α/β (optionnel)</label>
+                  <input
+                    className="field"
+                    value={row.ab}
+                    onChange={(e) => updateVxRow(row.id, "ab", e.target.value)}
+                    placeholder={alphaBeta ? `défaut ${alphaBeta}` : ""}
+                  />
+                </div>
+
+                <div className="vx-result">
+                  {out ? (
+                    <>
+                      <div><strong>Nouvelle contrainte :</strong></div>
+                      <div>V<strong>{row.dNew || "d₂"}</strong>Gy &nbsp;ou&nbsp;
+                        {row.nNew && out.d_per_frac_needed != null ? (
+                          <>V<strong>{out.d_per_frac_needed.toFixed(2)}</strong>Gy/f pour n={row.nNew}</>
+                        ) : (
+                          <>V<strong>{out.Dequiv_total.toFixed(2)}</strong>Gy total équivalent</>
+                        )}
+                      </div>
+                      <div className="muted small">
+                        (Équiv. totale calculée : {out.Dequiv_total.toFixed(2)} Gy
+                        {row.nNew && out.d_per_frac_needed != null ? ` — d/f nécessaire : ${out.d_per_frac_needed.toFixed(2)} Gy` : ""})
+                      </div>
+                    </>
+                  ) : (
+                    <div className="muted">Renseigner : dose seuil, d₁ et d₂</div>
+                  )}
+                </div>
+
+                <button
+                  className="vx-remove"
+                  onClick={() => removeVxRow(row.id)}
+                  title="Supprimer"
+                  aria-label="Supprimer"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+
+          <div className="vx-actions">
+            <button className="btn" onClick={addVxRow}>+ Ajouter une contrainte Vx</button>
+          </div>
+        </section>
+
       </div>
-
-      {/* Étape 1 */}
-      <section className="card">
-        <h2 className="step-title">1) BED totale autorisée</h2>
-
-        <div className="two-col">
-          <div className="col">
-            <label className="lbl">Organe (OAR)</label>
-            <select value={oar} onChange={(e) => setOar(e.target.value)}>
-              <option value="">— Choisir —</option>
-              {OAR_LIST.map((o) => (
-                <option key={o.name} value={o.name}>
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="col">
-            <label className="lbl">α/β (Gy) — manuel</label>
-            <input
-              value={abManual}
-              onChange={(e) => setAbManual(e.target.value)}
-              inputMode="decimal"
-            />
-          </div>
-        </div>
-
-        {Number.isFinite(abSelected) && (
-          <div className="hint">
-            <strong>α/β utilisé :</strong> {fmt(abSelected, 2)} Gy
-          </div>
-        )}
-
-        <div className="links">
-          <a
-            href="https://sfro-recorad.fr/radiotherapie-principes-generaux/doses-limites-dans-les-organes-a-risque/doses-limites-des-irradiations-normofractionnees-ou-hypofractionnees-moderees-dose-par-fraction-6-gy-des-organes-a-risque/"
-            target="_blank" rel="noreferrer"
-          >
-            Contraintes Recorad : dose par fraction &lt; 6 Gy
-          </a>
-          <a
-            href="https://sfro-recorad.fr/radiotherapie-principes-generaux/doses-limites-dans-les-organes-a-risque/test_doses-limites-des-irradiations-hypofractionnees-ablatives-dose-par-fraction-6-gy-des-organes-a-risque/"
-            target="_blank" rel="noreferrer"
-          >
-            Contraintes Recorad : dose par fraction &gt; 6 Gy
-          </a>
-        </div>
-
-        <div className="field-block">
-          <label className="lbl">Dose totale (Gy)</label>
-          <input value={totalA} onChange={(e) => setTotalA(e.target.value)} inputMode="decimal" />
-        </div>
-
-        <div className="field-block">
-          <label className="lbl">Nombre de fractions</label>
-          <input value={fractionsA} onChange={(e) => setFractionsA(e.target.value)} inputMode="numeric" />
-        </div>
-
-        <div className="field-block">
-          <label className="lbl">Dose par fraction (Gy)</label>
-          <input value={dpfA} onChange={(e) => setDpfA(e.target.value)} inputMode="decimal" />
-        </div>
-
-        <div className="actions">
-          <button className="btn" onClick={calcMissingA}>⚙️ Calculer le champ manquant</button>
-        </div>
-
-        <div className="result-pane">
-          <div><strong>BED autorisée :</strong> {fmt(B_A)}</div>
-          <div><strong>EQD2 autorisée :</strong> {fmt(EQD2_A)}</div>
-          <div><strong>Dose physique autorisée :</strong> {fmt(dosePhys_A)}</div>
-        </div>
-
-        <div className="field-block">
-          <label className="lbl">OU BED autorisée (saisie manuelle)</label>
-          <input value={bedA_manual} onChange={(e) => setBedA_manual(e.target.value)} inputMode="decimal" />
-        </div>
-      </section>
-
-      {/* Étape 2 */}
-      <section className="card">
-        <h2 className="step-title">2) BED utilisée (première irradiation)</h2>
-
-        <div className="field-block">
-          <label className="lbl">Dose totale reçue (Gy)</label>
-          <input value={totalU} onChange={(e) => setTotalU(e.target.value)} inputMode="decimal" />
-        </div>
-
-        <div className="field-block">
-          <label className="lbl">Nombre de fractions</label>
-          <input value={fractionsU} onChange={(e) => setFractionsU(e.target.value)} inputMode="numeric" />
-        </div>
-
-        <div className="field-block">
-          <label className="lbl">Dose par fraction (Gy) — calculée</label>
-          <input value={dpfU} onChange={(e) => setDpfU(e.target.value)} inputMode="decimal" />
-        </div>
-
-        <div className="result-pane">
-          <div><strong>BED utilisée :</strong> {fmt(B_U)}</div>
-          <div><strong>EQD2 utilisée :</strong> {fmt(EQD2_U)}</div>
-          <div><strong>Dose physique utilisée :</strong> {fmt(dosePhys_U)}</div>
-        </div>
-      </section>
-
-      {/* Étape 3 */}
-      <section className="card">
-        <h2 className="step-title">3) BED restante autorisée</h2>
-
-        <div className="field-block">
-          <label className="lbl">Mois écoulés depuis la fin de RT</label>
-          <input value={mois} onChange={(e) => setMois(e.target.value)} inputMode="numeric" />
-        </div>
-
-        <div className="field-block">
-          <label className="lbl">Modèle de dose d’oubli</label>
-          <select value={modeOubli} onChange={(e) => setModeOubli(e.target.value)}>
-            <option value="Paradis">Paradis et al. : récupération rapide</option>
-            <option value="Nieder">Nieder et al. : récupération rapide</option>
-            <option value="Abusaris">Abusaris et al. : récupération rapide</option>
-            <option value="Noël">Noël et al. : récupération lente</option>
-          </select>
-          <div className="model-notes">
-            <details>
-              <summary>Détails des modèles (cliquer)</summary>
-              <div className="notes">
-                <p><strong>Paradis :</strong><br/>0–3 mois : 0%<br/>4–6 mois : 10%<br/>7–12 mois : 25%<br/>≥12 mois : 50%</p>
-                <p><strong>Nieder :</strong><br/>0–3 mois : 0%<br/>4 : 17%<br/>5 : 25%<br/>6 : 28%<br/>7 : 33%<br/>8 : 37%<br/>9 : 40%<br/>10 : 45%<br/>≥11 : 50%</p>
-                <p><strong>Abusaris :</strong><br/>{`<`}6 mois : 0%<br/>6–12 mois : 25%<br/>{`>`}12 mois : 50%</p>
-                <p><strong>Noël :</strong><br/>0% avant 1 an, puis +5%/an jusqu’à 10 ans, plateau 50%.</p>
-              </div>
-            </details>
-          </div>
-        </div>
-
-        <div className="two-col">
-          <div className="col">
-            <div className="hint"><strong>% d’oubli auto :</strong> {fmt(forgetPct, 0)} %</div>
-          </div>
-          <div className="col">
-            <label className="lbl">% d’oubli — saisie manuelle (optionnel)</label>
-            <input value={pourcentManuel} onChange={(e) => setPourcentManuel(e.target.value)} inputMode="decimal" />
-          </div>
-        </div>
-
-        <div className="result-pane">
-          <div><strong>BED restante :</strong> {fmt(B_R)}</div>
-          <div><strong>EQD2 restante :</strong> {fmt(EQD2_R)}</div>
-        </div>
-
-        <div className="field-block">
-          <label className="lbl">OU BED restante (saisie manuelle)</label>
-          <input value={bedR_manual} onChange={(e) => setBedR_manual(e.target.value)} inputMode="decimal" />
-        </div>
-      </section>
-
-      {/* Étape 4 */}
-      <section className="card">
-        <h2 className="step-title">4) Dose maximale par fraction autorisée</h2>
-
-        <div className="field-block">
-          <label className="lbl">Nombre de fractions prévues</label>
-          <input value={nPrev} onChange={(e) => setNPrev(e.target.value)} inputMode="numeric" />
-        </div>
-
-        <div className="result-pane">
-          <div><strong>Dose max par fraction (Gy) :</strong> {fmt(dpfMax)}</div>
-          <div><strong>Dose totale max possible (Gy) :</strong> {fmt(totalMax)}</div>
-        </div>
-
-        <div className="save-row">
-          <label className="lbl">Nom de l’organe à sauvegarder</label>
-          <input value={organeTitre} onChange={(e) => setOrganeTitre(e.target.value)} />
-          <button className="btn" onClick={saveEntry}>💾 Sauvegarder</button>
-        </div>
-      </section>
-
-      {/* Historique */}
-      <section className="card">
-        <h2 className="step-title">📘 Résultats enregistrés</h2>
-        {history.length === 0 && <div className="hint">Aucun résultat pour l’instant.</div>}
-        {history.map((h, i) => (
-          <div key={i} className="history-block">
-            <div className="history-title">{h.name}</div>
-            {h.ab != null && <div className="small">α/β : {fmt(h.ab)}</div>}
-            <div className="history-row">
-              <div>
-                <div className="history-sub">Autorisé</div>
-                <div>BED : {h.A.BED} Gy</div>
-                <div>EQD2 : {h.A.EQD2} Gy</div>
-                <div>Dose physique : {h.A.phys} Gy</div>
-              </div>
-              <div>
-                <div className="history-sub">Utilisé</div>
-                <div>BED : {h.U.BED} Gy</div>
-                <div>EQD2 : {h.U.EQD2} Gy</div>
-                <div>Dose physique : {h.U.phys} Gy</div>
-              </div>
-              <div>
-                <div className="history-sub">Restant</div>
-                <div>BED : {h.R.BED} Gy</div>
-                <div>EQD2 : {h.R.EQD2} Gy</div>
-              </div>
-              <div>
-                <div className="history-sub">Plan</div>
-                <div>n : {h.plan.n}</div>
-                <div>d/f max : {h.plan.dpfMax} Gy</div>
-                <div>Totale max : {h.plan.totalMax} Gy</div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </section>
-
-      {/* Conversion VxGy */}
-      <section className="card">
-        <h2 className="step-title center">Conversion VxGy &lt; x% — équivalent</h2>
-
-        <div className="two-col">
-          <div className="col">
-            <label className="lbl">α/β (Gy) utilisé</label>
-            <input
-              value={vx_ab_manual}
-              onChange={(e) => setVxAbManual(e.target.value)}
-              placeholder={Number.isFinite(abSelected) ? String(abSelected) : ""}
-              inputMode="decimal"
-            />
-            <div className="hint small">
-              α/β par défaut : {Number.isFinite(abSelected) ? fmt(abSelected) : "—"}
-            </div>
-          </div>
-          <div className="col" />
-        </div>
-
-        <div className="two-col">
-          <div className="col">
-            <label className="lbl">Dose seuil initiale (Gy)</label>
-            <input value={vxDoseSeuilIni} onChange={(e) => setVxDoseSeuilIni(e.target.value)} inputMode="decimal" />
-          </div>
-          <div className="col">
-            <label className="lbl">Dose par fraction initiale (Gy)</label>
-            <input value={vxDpfIni} onChange={(e) => setVxDpfIni(e.target.value)} inputMode="decimal" />
-          </div>
-        </div>
-
-        <div className="two-col">
-          <div className="col">
-            <label className="lbl">Nouveau nombre de fractions (n)</label>
-            <input value={vxN} onChange={(e) => setVxN(e.target.value)} inputMode="numeric" />
-          </div>
-          <div className="col">
-            <label className="lbl">Nouvelle dose par fraction (Gy)</label>
-            <input value={vxDpfNew} onChange={(e) => setVxDpfNew(e.target.value)} inputMode="decimal" />
-          </div>
-        </div>
-
-        {vxResult && (
-          <div className="result-pane">
-            <div>
-              <strong>Nouvelle contrainte Vx :</strong><br />
-              • Équiv. totale (si d/f fixé) : {fmt(vxResult.equivTotalIfD1)} Gy<br />
-              • d/f nécessaire (si n fixé) : {fmt(vxResult.dpfNeededIfN1)} Gy
-            </div>
-          </div>
-        )}
-      </section>
-
-      <footer className="foot-space" />
     </div>
   );
 }
