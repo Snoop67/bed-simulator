@@ -115,7 +115,7 @@ export default function App() {
   const [nAuth, setNAuth] = useState(""); // nombre de fractions
   const [dAuth, setDAuth] = useState(""); // dose par fraction
   const [bedAuthManual, setBedAuthManual] = useState(""); // saisie directe de BED autorisée
-  const [blockBelow18, setBlockBelow18] = useState(false); // bloquer dpf < 1.8 Gy
+  const [blockBelow18, setBlockBelow18] = useState(false); // bloquer doses par fraction < 1.8 Gy
 
   // Étape 2 — Utilisée (corrigée : calcul du champ manquant au onBlur)
   const [tdUsed, setTdUsed] = useState("");
@@ -670,7 +670,7 @@ export default function App() {
         {/* ===== Actions / Historique ===== */}
         <section className="step">
           <h2 className="step-title">Sauvegarde</h2>
-          <label className="field-label">Titre (affiché tel quel)</label>
+          <label className="field-label">Nom de l'organe</label>
           <input
             className="field"
             value={titleSave}
@@ -728,7 +728,7 @@ export default function App() {
                   />
                 </div>
                 <div className="vx-col">
-                  <label className="field-label">Nouveau n (optionnel)</label>
+                  <label className="field-label">Nouveau nombre de fraction</label>
                   <input
                     className="field"
                     type="number"
@@ -737,7 +737,7 @@ export default function App() {
                   />
                 </div>
                 <div className="vx-col">
-                  <label className="field-label">Nouvelle dose/fraction d₂ (Gy)</label>
+                  <label className="field-label">Nouvelle dose/fraction(Gy)</label>
                   <input
                     className="field"
                     type="number"
@@ -768,7 +768,7 @@ export default function App() {
                       </div>
                       <div className="muted small">
                         (Équiv. totale calculée : {out.Dequiv_total.toFixed(2)} Gy
-                        {row.nNew && out.d_per_frac_needed != null ? ` — d/f nécessaire : ${out.d_per_frac_needed.toFixed(2)} Gy` : ""})
+                        {row.nNew && out.d_per_frac_needed != null ? ` — dose/fraction max : ${out.d_per_frac_needed.toFixed(2)} Gy` : ""})
                       </div>
                     </>
                   ) : (
