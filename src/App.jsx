@@ -7,7 +7,7 @@ import "./index.css";
  *
  * Contenu :
  *  - Étape 1 : OAR + α/β manuel, dose totale / n / dpf + bouton "Calculer le champ manquant"
- *              Options : "Bloquer les dpf < 1.8 Gy"
+ *              Options : "Bloquer les doses/fraction < 1.8 Gy"
  *              Affichage : BED/EQD2/Dose physique autorisées OU saisie manuelle de BED autorisée
  *  - Étape 2 : BED utilisée (calcul du champ manquant sur onBlur), BED/EQD2/physique utilisées
  *              OU saisie manuelle de BED utilisée
