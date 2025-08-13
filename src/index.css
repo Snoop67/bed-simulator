@@ -154,6 +154,25 @@ body {
   transform: scale(0.86);
 }
 
+.history-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #ff5c5c;
+  color: white;
+  border: none;
+  padding: 6px 8px;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+}
+
+.history-item {
+  position: relative; /* pour positionner la croix */
+}
+
 /* Responsive */
 @media (max-width: 820px) {
   .card { width: 95%; padding:16px; }
