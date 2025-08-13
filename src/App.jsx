@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useMemo, useState } from "react";
-import "./App.css";
+import "./index.css";
 
 /** ---------- Utilitaires ---------- */
 const parseNum = (v) => {
