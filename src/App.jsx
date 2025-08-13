@@ -945,7 +945,7 @@ export default function App() {
                         </div>
                         {row.nNew && out.d_per_frac_needed != null ? (
                           <div className="vx-sub-line">
-                            dose/fraction max : {out.d_per_frac_needed.toFixed(2)} Gy
+                            Dose max par fraction : {out.d_per_frac_needed.toFixed(2)} Gy
                           </div>
                         ) : (
                           <div className="vx-sub-line muted">
