@@ -474,6 +474,10 @@ export default function App() {
     ]);
   };
 
+  const removeHistoryItem = (index) => {
+  setHistory((h) => h.filter((_, i) => i !== index));
+};
+
   /* ----------------------- Conversion VxGy < x% ------------------------ */
 
   const addVxRow = () =>
@@ -824,18 +828,26 @@ export default function App() {
               .slice()
               .reverse()
               .map((h, i) => (
-                <div key={i} className="history-item">
-                  <div className="hist-title">{h.title}</div>
-                  <div>
-                    BED restante : {h.bedRemain || "-"} Gy — EQD2 restante :{" "}
-                    {h.eqd2Remain || "-"} Gy
-                  </div>
-                  <div> Dose physique restante : {h.physRemain || "-"} Gy</div>
-                  <div>
-                    Dose max/fraction : {h.dpfMax || "-"} Gy — Nb de fractions
-                    prévues : {h.nPlan || "-"}
-                  </div>
-                </div>
+<div key={i} className="history-item">
+  <button
+    className="history-remove"
+    onClick={() => removeHistoryItem(history.length - 1 - i)}
+    title="Supprimer"
+    aria-label="Supprimer"
+  >
+    ✕
+  </button>
+  <div className="hist-title">{h.title}</div>
+  <div>
+    BED restante : {h.bedRemain || "-"} Gy — EQD2 restante :{" "}
+    {h.eqd2Remain || "-"} Gy
+  </div>
+  <div> Dose physique restante : {h.physRemain || "-"} Gy</div>
+  <div>
+    Dose max/fraction : {h.dpfMax || "-"} Gy — Nb de fractions
+    prévues : {h.nPlan || "-"}
+  </div>
+</div>
               ))
           )}
         </div>
