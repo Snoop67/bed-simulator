@@ -37,8 +37,6 @@ const OARS = [
   { name: "Nerf optique", ab: 2 },
   { name: "Chiasma optique", ab: 2 },
   { name: "Rétine", ab: 2 },
-  { name: "Cristallin", ab: 1.25 }, // ≈ 1–1.5
-  { name: "Cervelet", ab: 2 },
   { name: "Cerveau (parenchyme)", ab: 2 },
   { name: "Hippocampe", ab: 2 },
   { name: "Glande parotide", ab: 3 },
@@ -46,22 +44,20 @@ const OARS = [
   { name: "Muqueuse orale", ab: 10 },
   { name: "Larynx (cartilage)", ab: 3 },
   { name: "Larynx (muqueuse)", ab: 10 },
-  { name: "Œsophage (tardif)", ab: 3 },
-  { name: "Poumon (tissu normal)", ab: 3 },
+  { name: "Poumon", ab: 3 },
   { name: "Cœur", ab: 3 },
-  { name: "Péricarde", ab: 3 },
-  { name: "Foie", ab: 2.75 }, // 2.5–3
-  { name: "Reins", ab: 1.5 },
+  { name: "Foie", ab: 3 }, // 2.5–3
+  { name: "Reins", ab: 3 },
   { name: "Vessie", ab: 3 },
   { name: "Rectum", ab: 3 },
   { name: "Intestin grêle", ab: 3 },
   { name: "Côlon", ab: 3 },
   { name: "Peau (réactions tardives)", ab: 3 },
   { name: "Peau (réactions aiguës)", ab: 10 },
-  { name: "Os cortical", ab: 1.75 }, // ≈ 1.5–2
+  { name: "Os", ab: 2 }, // ≈ 1.5–2
   { name: "Tête fémorale", ab: 2 },
   { name: "Testicules", ab: 2 },
-  { name: "Ovaires", ab: 3 },
+  { name: "Ovaires", ab: 2 },
 ];
 
 /* ========================================================================== */
