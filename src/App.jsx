@@ -136,7 +136,7 @@ export default function App() {
   const [nAuth, setNAuth] = useState(""); // nombre de fractions
   const [dAuth, setDAuth] = useState(""); // dose par fraction
   const [bedAuthManual, setBedAuthManual] = useState(""); // saisie directe de BED autorisée
-  const [blockBelow18, setBlockBelow18] = useState(false); // bloquer dpf < 1.8 Gy
+  const [blockBelow18, setBlockBelow18] = useState(false); // bloquer dose/fraction < 1.8 Gy
 
   // Étape 2 — utilisée
   const [tdUsed, setTdUsed] = useState("");
@@ -601,14 +601,14 @@ export default function App() {
               target="_blank"
               rel="noreferrer"
             >
-              &nbsp;• Dose par fraction ≤ 6 Gy
+              &nbsp;• Doses par fraction ≤ 6 Gy
             </a>
             <a
               href="https://sfro-recorad.fr/radiotherapie-principes-generaux/doses-limites-dans-les-organes-a-risque/test_doses-limites-des-irradiations-hypofractionnees-ablatives-dose-par-fraction-6-gy-des-organes-a-risque/"
               target="_blank"
               rel="noreferrer"
             >
-              &nbsp;• Dose par fraction &gt; 6 Gy
+              &nbsp;• Doses par fraction &gt; 6 Gy
             </a>
           </div>
 
@@ -877,7 +877,7 @@ export default function App() {
                   />
                 </div>
                 <div className="vx-col">
-                  <label className="field-label">Nouveau nombre de fraction</label>
+                  <label className="field-label">Nouveau nombre de fractions</label>
                   <input
                     className="field"
                     type="number"
@@ -937,7 +937,7 @@ export default function App() {
                           </div>
                         ) : (
                           <div className="vx-sub-line muted">
-                            (Renseigner n pour obtenir la d/f max)
+                            (Renseigner n pour obtenir la dose/fraction max)
                           </div>
                         )}
                       </>
@@ -955,7 +955,7 @@ export default function App() {
                       </>
                     )
                   ) : (
-                    <div className="muted">Renseigner : dose seuil, d₁ et d₂</div>
+                    <div className="muted">Équivalence calculée :</div>
                   )}
                 </div>
 
