@@ -52,8 +52,6 @@ const OARS = [
   { name: "Rectum", ab: 3 },
   { name: "Intestin grêle", ab: 3 },
   { name: "Côlon", ab: 3 },
-  { name: "Peau (réactions tardives)", ab: 3 },
-  { name: "Peau (réactions aiguës)", ab: 10 },
   { name: "Os", ab: 2 }, // ≈ 1.5–2
   { name: "Tête fémorale", ab: 2 },
   { name: "Testicules", ab: 2 },
@@ -547,7 +545,7 @@ export default function App() {
             </div>
 
             <div className="col fixed">
-              <label className="field-label">α/β (Gy)</label>
+              <label className="field-label">α/β</label>
               <input
                 className="field"
                 value={abManual}
